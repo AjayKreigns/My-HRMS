@@ -1,0 +1,385 @@
+/* Glass surfaces and motion for iFluids HRMS.
+   Surfaces are frosted panels floating over a soft colour wash; movement uses
+   spring-like easing (quick start, long gentle settle). */
+:root {
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.82);
+  --glass-line: rgba(255, 255, 255, 0.75);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 1px 2px rgba(15, 40, 60, 0.04), 0 10px 30px rgba(15, 40, 60, 0.07);
+  --glass-shadow-hover: 0 2px 4px rgba(15, 40, 60, 0.05), 0 18px 40px rgba(15, 40, 60, 0.12);
+  --blur: blur(22px) saturate(180%);
+}
+.theme-dark {
+  --glass: rgba(18, 32, 48, 0.55);
+  --glass-strong: rgba(18, 32, 48, 0.82);
+  --glass-line: rgba(255, 255, 255, 0.08);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  --glass-shadow-hover: 0 18px 44px rgba(0, 0, 0, 0.42);
+}
+
+/* ---------- colour wash behind the glass ---------- */
+.shell {
+  position: relative;
+  isolation: isolate;
+  background: #eef3f7;
+  --panel: rgba(255, 255, 255, 0.45);
+  --line-soft: rgba(15, 40, 60, 0.07);
+}
+.shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 50% at 12% 8%, rgba(20, 184, 166, 0.28), transparent 70%),
+    radial-gradient(38% 46% at 92% 14%, rgba(59, 130, 246, 0.22), transparent 70%),
+    radial-gradient(40% 50% at 78% 96%, rgba(242, 107, 91, 0.16), transparent 70%),
+    radial-gradient(36% 40% at 30% 88%, rgba(139, 92, 246, 0.12), transparent 70%);
+  animation: wash-drift 30s ease-in-out infinite alternate;
+}
+.theme-dark.shell {
+  background: #08121d;
+  --panel: rgba(255, 255, 255, 0.03);
+  --line-soft: rgba(255, 255, 255, 0.06);
+}
+.theme-dark.shell::before {
+  background:
+    radial-gradient(42% 50% at 12% 8%, rgba(20, 184, 166, 0.2), transparent 70%),
+    radial-gradient(38% 46% at 92% 14%, rgba(59, 130, 246, 0.16), transparent 70%),
+    radial-gradient(40% 50% at 78% 96%, rgba(242, 107, 91, 0.1), transparent 70%);
+}
+@keyframes wash-drift {
+  to {
+    transform: translate3d(0, -2%, 0) scale(1.06);
+  }
+}
+.shell .pr {
+  background: transparent;
+}
+
+/* ---------- glass surfaces ---------- */
+.card,
+.stat,
+.pr-panel,
+.pr-kpi,
+.pr-cycles,
+.pr-summary,
+.dir-card,
+.org-node,
+.kan-col,
+.pr-modules {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-edge), var(--glass-shadow);
+}
+.pr-modules {
+  margin: 16px 32px 0;
+  border-radius: 16px;
+  height: 50px;
+}
+.pr-modules a.active::after {
+  bottom: 6px;
+  left: 16px;
+  right: 16px;
+  height: 3px;
+  border-radius: 3px;
+}
+.pr-step,
+.pr-cycle,
+.kan-card {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: var(--glass-line);
+}
+.theme-dark .pr-step,
+.theme-dark .pr-cycle,
+.theme-dark .kan-card {
+  background: rgba(255, 255, 255, 0.03);
+}
+.pr-cycle.current {
+  background: linear-gradient(160deg, #14b8a6, #0f766e);
+  border-color: transparent;
+  box-shadow: 0 8px 22px rgba(15, 118, 110, 0.35);
+}
+.side {
+  background: linear-gradient(180deg, rgba(13, 27, 42, 0.92) 0%, rgba(11, 34, 51, 0.88) 100%);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+.topbar {
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--glass-line);
+}
+.theme-dark .topbar {
+  background: rgba(10, 20, 32, 0.6);
+}
+.topbar .searchbox {
+  background: rgba(15, 40, 60, 0.06);
+}
+.theme-dark .topbar .searchbox {
+  background: rgba(255, 255, 255, 0.05);
+}
+.dropdown-menu,
+.global-search .results,
+.modal {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
+  backdrop-filter: blur(30px) saturate(190%);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-edge), var(--shadow-lg);
+}
+.dropdown-menu,
+.global-search .results {
+  border-radius: 14px;
+  padding: 6px;
+}
+.dropdown-menu .menu-item,
+.global-search .result {
+  border-radius: 9px;
+}
+.dropdown-menu .menu-item:hover,
+.global-search .result:hover {
+  background: rgba(15, 118, 110, 0.08);
+}
+.modal-foot {
+  background: rgba(255, 255, 255, 0.35);
+}
+.theme-dark .modal-foot {
+  background: rgba(255, 255, 255, 0.03);
+}
+.tabs,
+.subnav,
+.pr-subs {
+  background: rgba(15, 40, 60, 0.06);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.theme-dark .tabs,
+.theme-dark .subnav,
+.theme-dark .pr-subs {
+  background: rgba(255, 255, 255, 0.05);
+}
+.tab.active,
+.subnav a.active,
+.pr-subs a.active {
+  background: var(--glass-strong);
+}
+.table th {
+  background: rgba(255, 255, 255, 0.35);
+}
+.theme-dark .table th {
+  background: rgba(255, 255, 255, 0.03);
+}
+.table tbody tr:hover {
+  background: rgba(15, 118, 110, 0.05);
+}
+.toast {
+  background: rgba(20, 34, 51, 0.82);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-weight: 500;
+}
+.btn-primary {
+  background: linear-gradient(180deg, #14917f, #0f766e);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 6px 16px rgba(15, 118, 110, 0.28);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #0f8a7a, #0c655e);
+}
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(15, 40, 60, 0.12);
+}
+.theme-dark .btn-ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line);
+}
+.avatar {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+.theme-dark .avatar {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- motion ---------- */
+.btn,
+.icon-btn,
+.pr-btn,
+.pr-cycle,
+.tab,
+.subnav a,
+.pr-subs a,
+.nav-item,
+.menu-item,
+.pr-tip button {
+  transition: transform 0.35s var(--ease-spring), background 0.25s ease, color 0.2s ease, box-shadow 0.3s ease, border-color 0.2s ease;
+}
+.btn:active:not(:disabled),
+.icon-btn:active,
+.pr-btn:active:not(:disabled),
+.pr-cycle:active,
+.tab:active,
+.pr-tip button:active {
+  transform: scale(0.96);
+}
+.stat,
+.pr-kpi,
+.pr-step,
+.pr-report,
+.dir-card,
+.kan-card,
+.org-node {
+  transition: transform 0.45s var(--ease-spring), box-shadow 0.45s var(--ease-spring), border-color 0.2s ease;
+}
+.stat:hover,
+.pr-kpi:hover,
+.pr-step:hover,
+.pr-report:hover,
+.dir-card:hover,
+.kan-card:hover,
+.org-node:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--glass-edge), var(--glass-shadow-hover);
+}
+.nav-item:hover {
+  transform: translateX(2px);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Each page settles in; its cards follow one after another. */
+.page-enter > * {
+  animation: rise-in 0.6s var(--ease-spring) both;
+}
+.page-enter > *:nth-child(2) {
+  animation-delay: 0.05s;
+}
+.page-enter > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.page-enter > *:nth-child(n + 4) {
+  animation-delay: 0.14s;
+}
+.page-enter .grid > *,
+.page-enter .stack > *,
+.page-enter .pr-stack > *,
+.page-enter .pr-cards4 > *,
+.page-enter .pr-cards2 > *,
+.page-enter .pr-steps > *,
+.page-enter .pr-reports > * {
+  animation: rise-in 0.65s var(--ease-spring) both;
+}
+.page-enter :is(.grid, .stack, .pr-stack, .pr-cards4, .pr-cards2, .pr-steps, .pr-reports) > :nth-child(2) {
+  animation-delay: 0.06s;
+}
+.page-enter :is(.grid, .stack, .pr-stack, .pr-cards4, .pr-cards2, .pr-steps, .pr-reports) > :nth-child(3) {
+  animation-delay: 0.12s;
+}
+.page-enter :is(.grid, .stack, .pr-stack, .pr-cards4, .pr-cards2, .pr-steps, .pr-reports) > :nth-child(4) {
+  animation-delay: 0.18s;
+}
+.page-enter :is(.grid, .stack, .pr-stack, .pr-cards4, .pr-cards2, .pr-steps, .pr-reports) > :nth-child(5) {
+  animation-delay: 0.22s;
+}
+.page-enter :is(.grid, .stack, .pr-stack, .pr-cards4, .pr-cards2, .pr-steps, .pr-reports) > :nth-child(n + 6) {
+  animation-delay: 0.26s;
+}
+.modal-backdrop {
+  animation: fade-in 0.3s ease both;
+}
+.modal {
+  animation: pop-in 0.5s var(--ease-spring) both;
+}
+.dropdown-menu,
+.global-search .results {
+  transform-origin: top right;
+  animation: drop-in 0.3s var(--ease-spring) both;
+}
+.global-search .results {
+  transform-origin: top left;
+}
+.toast {
+  animation: slide-up 0.5s var(--ease-spring) both;
+}
+.scrim.open {
+  animation: fade-in 0.3s ease both;
+}
+.side {
+  transition: transform 0.5s var(--ease-spring);
+}
+.progress-bar,
+.pr-track span,
+.bar-fill {
+  transition: width 0.8s var(--ease-spring);
+}
+.pr-donut circle {
+  animation: fade-in 0.8s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+}

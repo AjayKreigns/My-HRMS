@@ -1,0 +1,12 @@
+# Allow-list: ignore everything, then re-include only what belongs in the repo.
+/*
+!/.gitignore
+!/.github/
+!/README.md
+!/app/
+!/iFluids-HRMS-Design-System.html
+
+# Inside app/: source only
+/app/node_modules/
+/app/dist/
+/app/tmp/
