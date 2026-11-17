@@ -11,7 +11,7 @@ import '../payroll.css';
 
 // ---------- helpers ----------
 const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'];
-const PALETTE = ['#0f766e', '#2dd4bf', '#3b82f6', '#f26b5b', '#f5a524', '#8b5cf6', '#0ea5e9', '#64748b', '#ec4899', '#84cc16'];
+const PALETTE = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#64748b', '#2563eb', '#84cc16'];
 const inr = (n) => `INR ${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
 const monOf = (ym) => MON[Number(ym.slice(5)) - 1];
 const shortMonth = (ym) => `${MONTHS[Number(ym.slice(5)) - 1].slice(0, 3)} ${ym.slice(0, 4)}`;

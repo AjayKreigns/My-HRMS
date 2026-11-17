@@ -3,11 +3,11 @@
 .pr {
   min-width: 0;
   overflow-x: hidden;
-  --pr-err-bg: #fdecec;
+  --pr-err-bg: #fbe9e9;
   --pr-err-line: #f3c3c3;
-  --pr-err-ink: #b42318;
-  --pr-off: #9ccfc9;
-  --pr-off-ink: #f4fbfa;
+  --pr-err-ink: #b91c1c;
+  --pr-off: #9db8f2;
+  --pr-off-ink: #f4f8ff;
   min-height: calc(100vh - 64px);
   background: var(--bg);
   color: var(--ink);
@@ -17,8 +17,8 @@
   --pr-err-bg: #3b191d;
   --pr-err-line: #6e2a30;
   --pr-err-ink: #ffd1d9;
-  --pr-off: #1e4f4b;
-  --pr-off-ink: #9fc7c2;
+  --pr-off: #1e3a6e;
+  --pr-off-ink: #9db8f2;
 }
 
 /* module and sub-module tabs */
@@ -127,7 +127,7 @@
   color: var(--muted);
 }
 .pr-pos {
-  color: #10a36b;
+  color: #15803d;
 }
 .pr-neg {
   color: #e5484d;
@@ -437,7 +437,7 @@
   color: var(--muted);
 }
 .pr-cycle.completed .pr-cycle-s {
-  background: #10a36b;
+  background: #15803d;
   color: #fff;
 }
 .pr-cycle.current {
@@ -596,9 +596,9 @@
 .pr-tip {
   width: 380px;
   max-width: 100%;
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.14), rgba(59, 130, 246, 0.08));
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(6, 182, 212, 0.08));
   color: var(--ink);
-  border: 1px solid rgba(20, 184, 166, 0.25);
+  border: 1px solid rgba(37, 99, 235, 0.25);
   border-radius: var(--r-lg);
   padding: 16px 18px;
 }
@@ -685,7 +685,7 @@
 }
 .pr-step-check {
   margin-left: auto;
-  color: #10a36b;
+  color: #15803d;
 }
 .pr-error {
   display: flex;

@@ -15,7 +15,7 @@ const BADGE = (glyph, small, big) =>
 const APP_STORE = BADGE('<rect x="12" y="7" width="12" height="20" rx="2.5" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="18" cy="23.5" r="1" fill="#fff"/>', 'Download on the', 'App Store');
 const PLAY_STORE = BADGE('<path d="M12 7.5v19l14-9.5z" fill="#fff"/>', 'GET IT ON', 'Google Play');
 const HRMS_MARK = svgUrl(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="79" height="32" viewBox="0 0 79 32"><text x="0" y="25" fill="#0f766e" font-size="25" font-weight="800" font-family="Arial, sans-serif" letter-spacing="-0.5">hrms</text><circle cx="69" cy="9" r="2.4" fill="#0f766e"/><circle cx="75" cy="6" r="1.6" fill="#0f766e"/><circle cx="75.5" cy="12.5" r="1.6" fill="#0f766e"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" width="79" height="32" viewBox="0 0 79 32"><text x="0" y="25" fill="#2563eb" font-size="25" font-weight="800" font-family="Arial, sans-serif" letter-spacing="-0.5">hrms</text><circle cx="69" cy="9" r="2.4" fill="#2563eb"/><circle cx="75" cy="6" r="1.6" fill="#2563eb"/><circle cx="75.5" cy="12.5" r="1.6" fill="#2563eb"/></svg>',
 );
 
 // Input with its name shown inside the box; it slides up once the box is used.

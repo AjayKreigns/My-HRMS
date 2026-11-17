@@ -1,10 +1,10 @@
 /* iFluids HRMS identity: deep navy and teal, rounded surfaces, Plus Jakarta Sans. */
 :root {
   --font: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
-  --brand: #0f766e;
-  --brand-dark: #115e59;
-  --brand-soft: #e3f3f1;
-  --accent: #f26b5b;
+  --brand: #2563eb;
+  --brand-dark: #1d4ed8;
+  --brand-soft: #eaf1ff;
+  --accent: #b91c1c;
   --ink: #142233;
   --muted: #64748b;
   --line: #e2e8f0;
@@ -22,13 +22,13 @@
   --s4: 16px;
   --s5: 20px;
   --s6: 30px;
-  --green: #16a34a;
-  --amber: #d97706;
-  --red: #dc2626;
+  --green: #15803d;
+  --amber: #b45309;
+  --red: #b91c1c;
   --blue: #2563eb;
-  --side: #0d1b2a;
+  --side: #0f172a;
   --panel: #f6f8fb;
-  --link: #0f766e;
+  --link: #2563eb;
   --search-bg: #f1f4f8;
 }
 
@@ -41,12 +41,12 @@
   --muted: #8ea2b7;
   --line: #1d3045;
   --line-soft: #172839;
-  --brand: #14a394;
-  --brand-dark: #0f8a7d;
-  --brand-soft: #123634;
-  --side: #07111b;
+  --brand: #3b82f6;
+  --brand-dark: #2563eb;
+  --brand-soft: rgba(59, 130, 246, 0.14);
+  --side: #020617;
   --panel: #0d1926;
-  --link: #3fd0bd;
+  --link: #60a5fa;
   --search-bg: #0d1926;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
@@ -109,7 +109,7 @@ p {
   position: fixed;
   inset: 0 auto 0 0;
   width: 240px;
-  background: linear-gradient(180deg, #0d1b2a 0%, #0b2233 100%);
+  background: linear-gradient(180deg, #0f172a 0%, #12284c 50%, #0b1f3a 100%);
   color: #b4c2d1;
   display: flex;
   flex-direction: column;
@@ -117,7 +117,7 @@ p {
   transition: transform 0.2s;
 }
 .theme-dark .side {
-  background: var(--side);
+  background: linear-gradient(180deg, #020617 0%, #080e20 50%, #0f172a 100%);
   border-right: 1px solid var(--line);
 }
 .side-brand {
@@ -179,12 +179,12 @@ p {
   color: #fff;
 }
 .nav-item.active {
-  background: linear-gradient(90deg, rgba(45, 212, 191, 0.22), rgba(45, 212, 191, 0.06));
-  box-shadow: inset 3px 0 0 #2dd4bf;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.85), rgba(8, 145, 178, 0.75));
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.35), 0 6px 20px rgba(37, 99, 235, 0.28);
   color: #fff;
 }
 .nav-item.active .icon {
-  color: #2dd4bf;
+  color: #fff;
 }
 .nav-item .count {
   margin-left: auto;
@@ -606,7 +606,7 @@ p {
 .btn-primary {
   background: var(--brand);
   color: #fff;
-  box-shadow: 0 1px 2px rgba(15, 118, 110, 0.3);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.3);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--brand-dark);
@@ -867,20 +867,20 @@ p {
   white-space: nowrap;
 }
 .badge-green {
-  background: #dcf5ea;
-  color: #0b7a4b;
+  background: #e7f6ec;
+  color: #15803d;
 }
 .badge-amber {
-  background: #fdf3e2;
-  color: #a35a04;
+  background: #fdf2e3;
+  color: #b45309;
 }
 .badge-red {
-  background: #fdecec;
-  color: #b42318;
+  background: #fbe9e9;
+  color: #b91c1c;
 }
 .badge-blue {
-  background: #e8effd;
-  color: #1d4ed8;
+  background: #eaf1ff;
+  color: #2563eb;
 }
 .badge-purple {
   background: #ece8fb;
@@ -1076,7 +1076,7 @@ p {
 .hero {
   position: relative;
   overflow: hidden;
-  background: radial-gradient(120% 140% at 100% 0%, #14b8a6 0%, rgba(20, 184, 166, 0) 55%), linear-gradient(125deg, #0d1b2a 0%, #0f3b4a 60%, #0f766e 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0e7490 100%);
   color: #fff;
   border-radius: var(--r-lg);
   padding: 24px 26px;
@@ -1408,20 +1408,20 @@ p {
   background: rgba(255, 255, 255, 0.03);
 }
 .theme-dark .badge-green {
-  background: rgba(63, 179, 127, 0.16);
-  color: #6fd3a0;
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
 }
 .theme-dark .badge-amber {
-  background: rgba(253, 126, 20, 0.16);
-  color: #fdae6b;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
 }
 .theme-dark .badge-red {
-  background: rgba(235, 72, 60, 0.16);
-  color: #ff9a92;
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
 }
 .theme-dark .badge-blue {
-  background: rgba(41, 134, 206, 0.18);
-  color: #7cc0f2;
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
 }
 .theme-dark .badge-purple {
   background: rgba(179, 153, 255, 0.16);
