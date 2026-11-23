@@ -1,5 +1,5 @@
 // Shared UI building blocks: icons, cards, tables, forms, dialogs and toasts.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDB, addItem, patchItem, removeItem } from './store.js';
 import { fullName, initials, fmtDate, activeEmployees } from './utils.js';
@@ -12,6 +12,7 @@ const PATHS = {
   wallet: 'M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm0 0V6a2 2 0 0 1 2-2h11v3M16 13.5h2',
   org: 'M9 3h6v5H9zM3 16h6v5H3zm12 0h6v5h-6zM12 8v4M6 16v-4h12v4',
   chart: 'M4 20V10m6 10V4m6 16v-7m4 7H2',
+  sidebar: 'M4 5h16v14H4zM9 5v14',
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2.1-1.6-2-3.5-2.5 1a7.5 7.5 0 0 0-2-1.2L14.5 3h-4l-.4 2.5a7.5 7.5 0 0 0-2 1.2l-2.5-1-2 3.5 2.1 1.6a7.4 7.4 0 0 0 0 2.4l-2.1 1.6 2 3.5 2.5-1a7.5 7.5 0 0 0 2 1.2l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2-1.2l2.5 1 2-3.5-2.1-1.6c.1-.4.1-.8.1-1.2z',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-13v4l3 2',
   calendar: 'M4 5h16v16H4zm0 5h16M8 3v4m8-4v4',
@@ -99,7 +100,7 @@ export function EmpChip({ emp, sub, onClick }) {
 const STATUS_TONE = {
   Approved: 'green', Active: 'green', Completed: 'green', Paid: 'green', Present: 'green', 'On track': 'green', Hired: 'green', Resolved: 'green', Closed: 'grey', Open: 'blue', Submitted: 'blue', Finalized: 'blue', Scheduled: 'blue', 'In progress': 'blue', Sent: 'blue', Interview: 'blue', Screening: 'blue', Applied: 'grey', Offer: 'purple', Accepted: 'green',
   Pending: 'amber', Draft: 'grey', 'Manager review pending': 'amber', Behind: 'amber', 'On hold': 'amber', Probation: 'amber', 'Pre-boarding': 'purple', 'Notice period': 'amber', WFH: 'purple', Leave: 'amber', Holiday: 'blue', 'Weekly off': 'grey',
-  Rejected: 'red', Cancelled: 'grey', Absent: 'red', Exited: 'grey', 'At risk': 'red', Declined: 'red', High: 'red', Medium: 'amber', Low: 'grey', Urgent: 'red', Settled: 'green', 'Not clocked in': 'grey', Returned: 'grey',
+  Rejected: 'red', Cancelled: 'grey', Absent: 'red', 'Action Required': 'amber', Exited: 'grey', 'At risk': 'red', Declined: 'red', High: 'red', Medium: 'amber', Low: 'grey', Urgent: 'red', Settled: 'green', 'Not clocked in': 'grey', Returned: 'grey',
 };
 export function Badge({ children, tone }) {
   const t = tone || STATUS_TONE[children] || 'grey';
@@ -132,9 +133,58 @@ export function PageHead({ title, sub, children }) {
   );
 }
 
+// Tabs with a highlight that slides to the chosen tab, and content that glides in from the side the
+// new tab lies on. The content is whatever follows the tabs on the page (or follows the toolbar the tabs
+// sit in), so every screen that uses Tabs gets the motion without changing. Only opacity and transform
+// are animated, for 320 ms, so it stays smooth and never delays the page.
+const SWAP_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 export function Tabs({ tabs, active, onChange }) {
+  const root = useRef(null);
+  const before = useRef(null);
+  const [ready, setReady] = useState(false);
+  const keys = tabs.map((t) => (typeof t === 'string' ? t : t.key));
+  const signature = tabs.map((t) => (typeof t === 'string' ? t : `${t.key}:${t.label}`)).join('|');
+
+  // the sliding highlight follows the active tab, also when the tabs change size
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return undefined;
+    const place = () => {
+      const a = el.querySelector('.tab.active');
+      if (!a) return;
+      el.style.setProperty('--thumb-x', `${a.offsetLeft}px`);
+      el.style.setProperty('--thumb-w', `${a.offsetWidth}px`);
+    };
+    place();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null;
+    if (ro) ro.observe(el);
+    return () => ro && ro.disconnect();
+  }, [active, signature]);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true)); // no slide from nowhere on the first paint
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // the content that follows glides in when the tab changes
+  useLayoutEffect(() => {
+    const was = before.current;
+    before.current = active;
+    const el = root.current;
+    if (!el || was === null || was === active || !el.animate) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const dir = keys.indexOf(active) >= keys.indexOf(was) ? 1 : -1;
+    let anchor = el.parentElement && el.parentElement.classList.contains('row') ? el.parentElement : el;
+    while (anchor && !anchor.nextElementSibling && anchor.parentElement && !anchor.parentElement.matches('main, .content, .page-enter')) anchor = anchor.parentElement;
+    let n = anchor ? anchor.nextElementSibling : null;
+    for (let i = 0; n && i < 6; i += 1, n = n.nextElementSibling) {
+      n.getAnimations().forEach((a) => a.id === 'tab-swap' && a.cancel());
+      n.animate([{ opacity: 0, transform: `translateX(${dir * 18}px) scale(0.992)` }, { opacity: 1, transform: 'none' }], { duration: 320, delay: i * 35, easing: SWAP_EASE, fill: 'backwards', id: 'tab-swap' });
+    }
+  }, [active]);
+
   return (
-    <div className="tabs" role="tablist">
+    <div className={`tabs ${ready ? 'ready' : ''}`} role="tablist" ref={root}>
+      <span className="tab-thumb" aria-hidden="true" />
       {tabs.map((t) => {
         const key = typeof t === 'string' ? t : t.key;
         const label = typeof t === 'string' ? t : t.label;
@@ -246,6 +296,102 @@ function resolveOptions(field, db, values) {
   return opts.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
 }
 
+// Choose an employee by typing part of the name, the employee number or the job title.
+function EmployeePicker({ common, value, onChange, db, placeholder }) {
+  const people = useMemo(() => activeEmployees(db), [db]);
+  const chosen = people.find((e) => e.id === value) || db.employees.find((e) => e.id === value);
+  const text = (e) => `${fullName(e)} (${e.empNo})`;
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [at, setAt] = useState(0);
+  const needle = q.trim().toLowerCase();
+  const found = people
+    .filter((e) => !needle || [fullName(e), e.empNo, e.id, e.designation, e.department].some((x) => String(x || '').toLowerCase().includes(needle)))
+    .slice(0, 50);
+  const pick = (e) => {
+    onChange(e ? e.id : '');
+    setOpen(false);
+    setQ('');
+  };
+  const key = (ev) => {
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      setOpen(true);
+      setAt((i) => Math.min(i + 1, found.length - 1));
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      setAt((i) => Math.max(i - 1, 0));
+    } else if (ev.key === 'Enter' && open) {
+      ev.preventDefault(); // choose, do not submit the form
+      if (found[at]) pick(found[at]);
+    } else if (ev.key === 'Escape' && open) {
+      ev.stopPropagation();
+      setOpen(false);
+      setQ('');
+    }
+  };
+  return (
+    <div className="emp-pick">
+      <input
+        id={common.id}
+        name={common.name}
+        type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={`${common.id}_list`}
+        aria-autocomplete="list"
+        autoComplete="off"
+        disabled={common.disabled}
+        placeholder={chosen && !open ? '' : 'Search by name or employee number'}
+        value={open ? q : chosen ? text(chosen) : ''}
+        onFocus={() => {
+          setOpen(true);
+          setAt(0);
+        }}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+          setAt(0);
+        }}
+        onBlur={() => {
+          setOpen(false);
+          setQ('');
+        }}
+        onKeyDown={key}
+      />
+      {value && !common.disabled && (
+        <button type="button" className="emp-pick-clear" aria-label="Clear employee" onMouseDown={(e) => { e.preventDefault(); pick(null); }}>
+          ×
+        </button>
+      )}
+      {open && (
+        <ul className="emp-pick-list" id={`${common.id}_list`} role="listbox">
+          {found.length === 0 && <li className="emp-pick-none">No employee matches "{q}".</li>}
+          {found.map((e, i) => (
+            <li
+              key={e.id}
+              role="option"
+              aria-selected={e.id === value}
+              className={`${i === at ? 'on' : ''} ${e.id === value ? 'sel' : ''}`}
+              onMouseDown={(ev) => {
+                ev.preventDefault();
+                pick(e);
+              }}
+              onMouseEnter={() => setAt(i)}
+            >
+              <span>{fullName(e)}</span>
+              <small className="muted">
+                {e.empNo}
+                {e.designation ? ` · ${e.designation}` : ''}
+              </small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function Field({ field, value, onChange, db, values }) {
   const id = `f_${field.key}`;
   const common = { id, name: field.key, required: field.required, placeholder: field.placeholder || '', disabled: field.disabled };
@@ -254,8 +400,10 @@ export function Field({ field, value, onChange, db, values }) {
     case 'textarea':
       input = <textarea {...common} rows={field.rows || 3} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
       break;
-    case 'select':
-    case 'employee': {
+    case 'employee':
+      input = <EmployeePicker common={common} value={value} onChange={onChange} db={db} placeholder={field.placeholder} />;
+      break;
+    case 'select': {
       const opts = resolveOptions(field, db, values);
       input = (
         <select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
@@ -277,6 +425,22 @@ export function Field({ field, value, onChange, db, values }) {
             <label key={e.id} className={`multi-opt ${sel.includes(e.id) ? 'on' : ''}`}>
               <input type="checkbox" checked={sel.includes(e.id)} onChange={(ev) => onChange(ev.target.checked ? [...sel, e.id] : sel.filter((x) => x !== e.id))} />
               {fullName(e)}
+            </label>
+          ))}
+        </div>
+      );
+      break;
+    }
+    case 'multiselect': {
+      const sel = Array.isArray(value) ? value : [];
+      const opts = resolveOptions(field, db, values);
+      input = (
+        <div className="multi">
+          {opts.length === 0 && <span className="muted">Nothing to choose from.</span>}
+          {opts.map((o) => (
+            <label key={o.value} className={`multi-opt ${sel.includes(o.value) ? 'on' : ''}`}>
+              <input type="checkbox" checked={sel.includes(o.value)} onChange={(ev) => onChange(ev.target.checked ? [...sel, o.value] : sel.filter((x) => x !== o.value))} />
+              {o.label}
             </label>
           ))}
         </div>
@@ -353,7 +517,7 @@ export function FormGrid({ fields, values, setValues, db }) {
   return <div className="form-grid">{out}</div>;
 }
 
-export function FormModal({ title, fields, initial = {}, onSave, onClose, submitLabel = 'Save', wide, validate, children }) {
+export function FormModal({ title, fields, initial = {}, onSave, onClose, submitLabel = 'Save', wide, validate, children, after }) {
   const db = useDB();
   const [values, setValues] = useState(() => ({ ...Object.fromEntries(fields.filter((f) => f.default !== undefined).map((f) => [f.key, f.default])), ...initial }));
   const [error, setError] = useState('');
@@ -370,6 +534,7 @@ export function FormModal({ title, fields, initial = {}, onSave, onClose, submit
       <form onSubmit={submit}>
         {children && children(values, setValues)}
         <FormGrid fields={fields} values={values} setValues={setValues} db={db} />
+        {after && after(values, setValues)}
         {error && <p className="form-error">{error}</p>}
         <div className="modal-foot inline">
           <Btn kind="ghost" onClick={onClose}>

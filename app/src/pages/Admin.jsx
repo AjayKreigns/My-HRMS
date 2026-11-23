@@ -6,7 +6,8 @@ import { PRIMARY_FIELDS, CONTACT_FIELDS, jobFields, timeFields, FINANCE_FIELDS, 
 import Payroll from './Payroll.jsx';
 import { LeaveAdmin, AttendanceAdmin, PerformanceAdmin, ExpensesAdmin, ProjectsAdmin, AssetsAdmin, HelpdeskAdmin } from './AdminOps.jsx';
 import Hiring from './Hiring.jsx';
-import { empById, fullName, fmtDate, money, todayISO, addDays, salaryBreakup, leaveBalances, parseISO, ymOf, monthLabel, payslipFor, daysInMonth } from '../utils.js';
+import { empById, fullName, fmtDate, money, todayISO, addDays, breakupFor, parseISO, ymOf, monthLabel, payslipFor, daysInMonth, cycleMonthOf, cycleStartOf } from '../utils.js';
+import { leaveBalances } from '../leave.js';
 import { monthRecords, attendanceStats } from './TimeOff.jsx';
 
 export default function Admin({ user, section }) {
@@ -185,7 +186,7 @@ function Employees({ user }) {
 // ---------- onboarding & exit ----------
 export function fnfFor(db, exit) {
   const emp = empById(db, exit.empId);
-  const b = salaryBreakup(emp.ctc, db.payrollSettings);
+  const b = breakupFor(db, emp);
   const basic = b.earnings[0][1];
   const lwd = exit.lastWorkingDay;
   const ym = lwd.slice(0, 7);
@@ -416,7 +417,7 @@ function Lifecycle({ user }) {
 function Reports() {
   const db = useDB();
   const [tab, setTab] = useState('headcount');
-  const ym = ymOf();
+  const ym = cycleMonthOf(todayISO(), cycleStartOf(db));
   const current = db.employees.filter((e) => e.status !== 'Exited');
   const group = (arr, key) => Object.entries(arr.reduce((m, x) => ((m[key(x)] = (m[key(x)] || 0) + 1), m), {})).map(([label, value]) => ({ label, value }));
   const year = String(new Date().getFullYear());
@@ -452,7 +453,7 @@ function Reports() {
         <Card
           pad={false}
           title={`Attendance summary — ${monthLabel(ym)}`}
-          actions={<Btn kind="ghost" small icon="download" onClick={() => exportCSV(`attendance-summary-${ym}`, [{ label: 'Employee', csv: (r) => fullName(r.emp) }, { label: 'Present', csv: (r) => r.st.present }, { label: 'WFH', csv: (r) => r.st.wfh }, { label: 'Leave', csv: (r) => r.st.leave }, { label: 'Absent', csv: (r) => r.st.absent }, { label: 'On time %', csv: (r) => r.st.onTimePct }], attRows)}>Export</Btn>}
+          actions={<Btn kind="ghost" small icon="download" onClick={() => exportCSV(`attendance-summary-${ym}`, [{ label: 'Employee', csv: (r) => fullName(r.emp) }, { label: 'Present', csv: (r) => r.st.present }, { label: 'WFH', csv: (r) => r.st.wfh }, { label: 'Leave', csv: (r) => r.st.leave }, { label: 'Absent', csv: (r) => r.st.absent }, { label: 'Action required', csv: (r) => r.st.action }, { label: 'On time %', csv: (r) => r.st.onTimePct }], attRows)}>Export</Btn>}
         >
           <DataTable
             rows={attRows}
@@ -464,6 +465,7 @@ function Reports() {
               { key: 'wfh', label: 'WFH', sortValue: (r) => r.st.wfh, render: (r) => r.st.wfh },
               { key: 'leave', label: 'Leave', sortValue: (r) => r.st.leave, render: (r) => r.st.leave },
               { key: 'absent', label: 'Absent', sortValue: (r) => r.st.absent, render: (r) => r.st.absent },
+              { key: 'action', label: 'Action required', sortValue: (r) => r.st.action, render: (r) => r.st.action },
               { key: 'ontime', label: 'On time', sortValue: (r) => r.st.onTimePct, render: (r) => `${r.st.onTimePct}%` },
             ]}
           />

@@ -2,7 +2,8 @@ import { useDB } from '../store.js';
 import { Card, Btn, Avatar, EmpChip, Badge, Empty, Icon } from '../ui.jsx';
 import { useClock, go } from '../App.jsx';
 import { pendingFor } from './Inbox.jsx';
-import { fullName, fmtDate, todayISO, leaveBalances, onLeave, activeEmployees, parseISO, fmtTime, addDays, attendanceFor, empById } from '../utils.js';
+import { scheduleFor, fullName, fmtDate, todayISO, onLeave, activeEmployees, parseISO, fmtTime, addDays, attendanceFor, empById } from '../utils.js';
+import { leaveBalances } from '../leave.js';
 
 function greeting() {
   const h = new Date().getHours();
@@ -14,8 +15,8 @@ export default function Home({ user }) {
   const clock = useClock(user);
   const today = todayISO();
   const now = new Date();
-  const shift = db.shifts.find((s) => s.id === user.shiftId) || db.shifts[0];
-  const balances = leaveBalances(db, user.id).filter((b) => !b.type.unlimited && b.quota > 0);
+  const shift = scheduleFor(db, user);
+  const balances = leaveBalances(db, user.id).filter((b) => !b.type.unlimited && b.unit !== 'Hours' && b.quota > 0);
   const holidays = db.holidays.filter((h) => h.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4);
   const people = activeEmployees(db);
   const offToday = people.filter((e) => onLeave(db, e.id, today));

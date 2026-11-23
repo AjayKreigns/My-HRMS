@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useDB, update, uid } from '../store.js';
 import { Card, Btn, Badge, Tabs, KV, FormModal, Avatar, EmpChip, DataTable, Empty, toast, confirmAction, Icon } from '../ui.jsx';
 import { go } from '../App.jsx';
-import { empById, fullName, fmtDate, money, salaryBreakup, parseISO } from '../utils.js';
+import { empById, fullName, fmtDate, money, breakupFor, parseISO } from '../utils.js';
 
 const opt = (arr) => arr;
 export const PRIMARY_FIELDS = [
@@ -74,6 +74,8 @@ export const timeFields = (db) => [
 export const FINANCE_FIELDS = [
   { key: 'ctc', label: 'Annual CTC (INR)', type: 'number', required: true, section: 'Salary' },
   { key: 'taxRegime', label: 'Tax regime', type: 'select', options: ['New', 'Old'], default: 'New', section: 'Salary' },
+  { key: 'payGroupId', label: 'Pay group', type: 'select', options: (db) => (db.payGroups || []).map((g) => ({ value: g.id, label: g.name })), section: 'Salary', help: 'Decides pay day and which statutory deductions apply. Blank means the first pay group.' },
+  { key: 'structureId', label: 'Pay structure', type: 'select', options: (db) => (db.payStructures || []).map((s) => ({ value: s.id, label: s.name })), section: 'Salary', help: 'Blank means the structure of the pay group.' },
   { key: 'bank_bankName', label: 'Bank name', section: 'Bank account' },
   { key: 'bank_accountNumber', label: 'Account number', section: 'Bank account' },
   { key: 'bank_ifsc', label: 'IFSC code', section: 'Bank account' },
@@ -222,7 +224,7 @@ export default function Profile({ user, empId, tab: initialTab }) {
     ...(canSensitive || isManager ? [{ key: 'documents', label: 'Documents' }, { key: 'assets', label: 'Assets' }] : []),
     ...(canSensitive ? [{ key: 'finances', label: 'Finances' }] : []),
   ];
-  const b = salaryBreakup(emp.ctc, db.payrollSettings);
+  const b = breakupFor(db, emp);
 
   return (
     <div>

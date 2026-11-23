@@ -1,6 +1,6 @@
 // Sample data for a fresh install. Names and figures are fictional placeholders;
 // the HR admin edits or replaces them from the Admin pages.
-import { addDays, addMonths, iso, todayISO, ymOf } from './utils.js';
+import { addDays, addMonths, iso, todayISO, ymOf, structureFromSettings, groupFromSettings } from './utils.js';
 
 const COLORS = ['#5746af', '#0d9488', '#d97706', '#2563eb', '#db2777', '#16a34a', '#7c3aed', '#dc2626', '#0891b2', '#65a30d'];
 
@@ -31,6 +31,27 @@ const PEOPLE = [
   ['E122', 'Imran', 'Sheikh', 'Male', 'Process Safety Engineer', 'Process Safety', 'E102', 'employee', 880000, '2021-03-22'],
 ];
 
+// Leave types with the company policy as their rules. Every value here can be changed in
+// Admin > Leave settings > Leave types.
+const SANDWICH_CL = { sw_enabled: true, sw_scope: 'Whole request', sw_basis: 'Working days', sw_minDays: 2, sw_weeklyOffs: true, sw_holidays: true, sw_holidayBlock: 'Count', sw_edges: false, sw_merge: true };
+const SANDWICH_PL = { sw_enabled: true, sw_scope: 'Whole request', sw_basis: 'Calendar days', sw_minDays: 2, sw_weeklyOffs: true, sw_holidays: true, sw_holidayBlock: 'Skip the block', sw_edges: false, sw_merge: true };
+export function seedLeaveTypes() {
+  const base = { carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'All', active: true, creditDay: 26, needsApproval: true, allowPartial: true };
+  return [
+    { ...base, id: 'lt1', name: 'Casual Leave', code: 'CL', annualQuota: 12, accrual: 'Monthly', color: '#5746af', joinCutoffDay: 15, ...SANDWICH_CL, noCombineWith: ['lt3'], combineAction: 'Convert to LOP', backdateDays: 3, backdateAction: 'Convert to LOP', cutoffTime: '09:30', lateInformLop: 0.5, description: '12 days a year, 1 day credited each month. Cannot be carried forward or encashed. Cannot be taken next to Privilege Leave.' },
+    { ...base, id: 'lt2', name: 'Sick Leave', code: 'SL', annualQuota: 12, accrual: 'Monthly', color: '#0d9488', joinCutoffDay: 15, ...SANDWICH_CL, noCombineWith: ['lt3'], combineAction: 'Convert to LOP', backdateDays: 3, backdateAction: 'Convert to LOP', cutoffTime: '09:30', lateInformLop: 0.5, certificateAfterDays: 3, description: 'For illness. Medical certificate needed for more than 3 days.' },
+    { ...base, id: 'lt3', name: 'Privilege Leave', code: 'PL', annualQuota: 12, accrual: 'Monthly', color: '#d97706', carryForward: 'Yes', maxCarryForward: 30, encashable: 'Yes', eligibleAfter: 'Probation end', accrueFrom: 'Joining date', ...SANDWICH_PL, description: '12 days a year, 1 day credited each month, usable after probation. Needs manager approval.' },
+    { ...base, id: 'lt4', name: 'Compensatory Off', code: 'CO', annualQuota: 0, accrual: 'Manual', color: '#2563eb', allowEmployeeRequest: false, description: 'Balance is added by HR.' },
+    { ...base, id: 'lt5', name: 'Maternity Leave', code: 'ML', annualQuota: 0, accrual: 'Manual', gender: 'Female', color: '#db2777', description: '90 days. HR adds the balance for the employee.' },
+    { ...base, id: 'lt6', name: 'Paternity Leave', code: 'PTL', annualQuota: 0, accrual: 'Manual', gender: 'Male', color: '#16a34a', description: 'HR adds the balance for the employee.' },
+    { ...base, id: 'lt7', name: 'Bereavement Leave', code: 'BL', annualQuota: 3, accrual: 'Yearly', color: '#64748b', description: '' },
+    { ...base, id: 'lt9', name: 'Permission', code: 'PRM', unit: 'Hours', timesPerCycle: 2, maxHoursEach: '', maxHoursPerCycle: '', accrual: 'Manual', annualQuota: 0, color: '#0891b2', insufficientAction: 'Block', description: 'Short permission taken in hours. Can be used twice in each attendance cycle.' },
+    { ...base, id: 'lt8', name: 'Loss of Pay', code: 'LOP', annualQuota: 0, unlimited: true, accrual: 'None', paid: 'Unpaid', color: '#dc2626', ...SANDWICH_PL, description: 'Unpaid leave; deducted in payroll. Weekly offs and holidays between LOP days count as LOP.' },
+  ];
+}
+
+const PAYROLL_SETTINGS = { basicPct: 40, hraPct: 50, conveyance: 1600, medical: 1250, pfEnabled: true, pfCeiling: 15000, esiEnabled: true, ptEnabled: true, ptAmount: 208, lwfEnabled: true, lwfEmployee: 20, lwfEmployer: 40, payDay: 'Last working day', lockDay: 25, cycleStartDay: 26, payGroup: 'iFluids Monthly' };
+
 const PASSWORDS = { 'admin@ifluids.com': 'Admin@123', 'manager@ifluids.com': 'Manager@123', 'employee@ifluids.com': 'Employee@123' };
 
 export function seed() {
@@ -50,7 +71,7 @@ export function seed() {
     { id: 'loc3', name: 'Client Site', address: 'Varies by project', city: '', state: '', country: 'India', timezone: 'Asia/Kolkata' },
   ];
   const shifts = [
-    { id: 'sh1', name: 'General Shift', start: '09:30', end: '18:30', grace: 15, breakMinutes: 60, fullDayHours: 8, halfDayHours: 4 },
+    { id: 'sh1', name: 'General Shift', start: '09:00', end: '18:30', grace: 15, breakMinutes: 60, fullDayHours: 8, halfDayHours: 4, followsPolicy: true },
     { id: 'sh2', name: 'Early Shift', start: '07:00', end: '16:00', grace: 10, breakMinutes: 60, fullDayHours: 8, halfDayHours: 4 },
     { id: 'sh3', name: 'Site Shift', start: '08:00', end: '17:00', grace: 15, breakMinutes: 60, fullDayHours: 8, halfDayHours: 4 },
   ];
@@ -135,16 +156,7 @@ export function seed() {
     };
   });
 
-  const leaveTypes = [
-    { id: 'lt1', name: 'Casual Leave', code: 'CL', annualQuota: 12, accrual: 'Monthly', carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'All', color: '#5746af', description: 'For personal matters, planned in advance.' },
-    { id: 'lt2', name: 'Sick Leave', code: 'SL', annualQuota: 12, accrual: 'Yearly', carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'All', color: '#0d9488', description: 'For illness; certificate needed beyond 2 days.' },
-    { id: 'lt3', name: 'Earned Leave', code: 'EL', annualQuota: 15, accrual: 'Monthly', carryForward: 'Yes', maxCarryForward: 30, encashable: 'Yes', paid: 'Paid', gender: 'All', color: '#d97706', description: 'Privilege leave; carries forward up to 30 days.' },
-    { id: 'lt4', name: 'Compensatory Off', code: 'CO', annualQuota: 0, accrual: 'On request', carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'All', color: '#2563eb', description: 'Granted for working on holidays or weekly offs.' },
-    { id: 'lt5', name: 'Maternity Leave', code: 'ML', annualQuota: 182, accrual: 'Yearly', carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'Female', color: '#db2777', description: '26 weeks as per the Maternity Benefit Act.' },
-    { id: 'lt6', name: 'Paternity Leave', code: 'PL', annualQuota: 5, accrual: 'Yearly', carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'Male', color: '#16a34a', description: '' },
-    { id: 'lt7', name: 'Bereavement Leave', code: 'BL', annualQuota: 3, accrual: 'Yearly', carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'All', color: '#64748b', description: '' },
-    { id: 'lt8', name: 'Loss of Pay', code: 'LOP', annualQuota: 0, unlimited: true, accrual: 'None', carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Unpaid', gender: 'All', color: '#dc2626', description: 'Unpaid leave; deducted in payroll.' },
-  ];
+  const leaveTypes = seedLeaveTypes();
 
   const H = (date, name, type = 'Mandatory') => ({ id: `hol_${date}`, date, name, type, location: 'All locations' });
   const holidays = [
@@ -203,6 +215,7 @@ export function seed() {
 
   return {
     version: 1,
+    migrations: ['leave-rules-1', 'attendance-hours-1', 'attendance-action-1', 'sample-no-leave-1', 'permission-leave-1', 'sample-leave-history-1'],
     company: {
       name: 'iFluids Engineering',
       legalName: 'iFluids Engineering',
@@ -236,15 +249,17 @@ export function seed() {
     employees,
     attendance: [],
     attendanceRequests,
-    attendanceSettings: { allowWebClockIn: true, allowRemote: true, autoClockOutHours: 14, overtimeAfterHours: 9, overtimeRate: 1.5, lateMarksForHalfDay: 3 },
+    attendanceSettings: { allowWebClockIn: true, allowRemote: true, autoClockOutHours: 14, regularizeLimit: 3, regularizeWithinDays: '', lockPastCycles: true, registerView: 'Monthly', hoursRuleEnabled: true, workStart: '09:00', workEnd: '18:30', requiredHours: '', graceMinutes: 15, missingPunchOut: 'Action required', overtimeEnabled: false, overtimeAfterHours: 9, overtimeRate: 1.5, lateMarksForHalfDay: 3 },
     overtime: [{ id: 'ot1', empId: 'E108', date: addDays(today, -9), hours: 3, reason: 'HAZOP report deadline', status: 'Approved' }],
     leaveTypes,
     leaveRequests,
     leaveAdjustments: [],
     compOffRequests: [{ id: 'co1', empId: 'E110', workedOn: addDays(today, -12), days: 1, reason: 'Weekend shutdown audit', status: 'Pending' }],
     holidays,
-    payrollSettings: { basicPct: 40, hraPct: 50, conveyance: 1600, medical: 1250, pfEnabled: true, pfCeiling: 15000, esiEnabled: true, ptEnabled: true, ptAmount: 208, lwfEnabled: true, lwfEmployee: 20, lwfEmployer: 40, payDay: 'Last working day', lockDay: 25, cycleStartDay: 26, payGroup: 'iFluids Monthly' },
+    payrollSettings: { ...PAYROLL_SETTINGS },
     // Every month of the financial year so far has been paid (in April, the last three months).
+    payStructures: [structureFromSettings(PAYROLL_SETTINGS)],
+    payGroups: [groupFromSettings(PAYROLL_SETTINGS)],
     payrollRuns: Array.from({ length: ((Number(ym.slice(5)) + 8) % 12) || 3 }, (_, i) => i + 1).map((n) => ({ id: `run${n}`, month: addMonths(ym, -n), status: 'Paid', processedOn: `${addMonths(ym, -n + 1)}-01`, processedAt: `${addMonths(ym, -n + 1)}-01T15:57:00`, processedBy: 'E103', steps: {} })),
     payrollAdjustments: [],
     payrollHolds: [],

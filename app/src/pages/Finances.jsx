@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useDB, addItem, update, uid, notify } from '../store.js';
 import { Card, Btn, Badge, DataTable, FormModal, PageHead, KV, Stat, Modal, Empty, toast } from '../ui.jsx';
 import { go } from '../App.jsx';
-import { money, monthLabel, payslipFor, salaryBreakup, incomeTax, declarationTotal, fullName, fmtDate, todayISO, ymOf, addMonths, empById } from '../utils.js';
+import { money, monthLabel, payslipFor, breakupFor, settingsFor, payGroupOf, incomeTax, declarationTotal, fullName, fmtDate, todayISO, ymOf, addMonths, empById } from '../utils.js';
 
 const TABS = [
   ['summary', 'Summary'],
@@ -104,7 +104,7 @@ export default function Finances({ user, tab }) {
   const [decl, setDecl] = useState(false);
   const [loan, setLoan] = useState(false);
   const [claim, setClaim] = useState(false);
-  const b = salaryBreakup(user.ctc, db.payrollSettings);
+  const b = breakupFor(db, user);
   const runs = db.payrollRuns.filter((r) => ['Finalized', 'Paid'].includes(r.status) && r.month >= user.dateOfJoining.slice(0, 7)).sort((a, z) => z.month.localeCompare(a.month));
   const latest = runs[0] && payslipFor(db, user, runs[0].month);
   const myDecl = db.taxDeclarations.find((d) => d.empId === user.id);
@@ -135,10 +135,10 @@ export default function Finances({ user, tab }) {
           </div>
           <div className="grid g2">
             <Card title="Payment information">
-              <KV items={[['Bank', user.bank?.bankName], ['Account number', user.bank?.accountNumber ? `•••• ${user.bank.accountNumber.slice(-4)}` : ''], ['IFSC', user.bank?.ifsc], ['Name on account', user.bank?.accountHolder], ['Salary payment mode', 'Bank transfer'], ['Pay day', db.payrollSettings.payDay]]} />
+              <KV items={[['Bank', user.bank?.bankName], ['Account number', user.bank?.accountNumber ? `•••• ${user.bank.accountNumber.slice(-4)}` : ''], ['IFSC', user.bank?.ifsc], ['Name on account', user.bank?.accountHolder], ['Salary payment mode', 'Bank transfer'], ['Pay group', payGroupOf(db, user)?.name], ['Pay day', settingsFor(db, user).payDay]]} />
             </Card>
             <Card title="Identity & statutory">
-              <KV items={[['PAN', user.pan], ['Aadhaar', user.aadhaar], ['UAN', user.uan], ['PF number', user.pfNumber], ['ESI number', user.esiNumber], ['PF enabled', db.payrollSettings.pfEnabled ? 'Yes' : 'No']]} />
+              <KV items={[['PAN', user.pan], ['Aadhaar', user.aadhaar], ['UAN', user.uan], ['PF number', user.pfNumber], ['ESI number', user.esiNumber], ['PF enabled', settingsFor(db, user).pfEnabled ? 'Yes' : 'No']]} />
             </Card>
           </div>
         </div>

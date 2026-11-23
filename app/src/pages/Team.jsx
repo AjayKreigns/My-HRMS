@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useDB } from '../store.js';
 import { Card, Badge, Tabs, DataTable, PageHead, EmpChip, Stat, Progress, DateRange } from '../ui.jsx';
 import { go } from '../App.jsx';
-import { attendanceFor, todayISO, fmtTime, hm, minutesBetween, leaveBalances, fmtDate, money, ymOf, addDays } from '../utils.js';
+import { attendanceFor, todayISO, fmtTime, hm, minutesBetween, fmtDate, money, addDays, cycleMonthOf, cycleLabel, cycleStartOf, monthLabel } from '../utils.js';
+import { leaveBalances } from '../leave.js';
 import { monthRecords, attendanceStats } from './TimeOff.jsx';
 
 export function teamOf(db, user, all = false) {
@@ -26,7 +27,7 @@ export default function Team({ user }) {
   const ids = new Set(team.map((e) => e.id));
   const todayRecs = team.map((e) => ({ emp: e, rec: attendanceFor(db, e.id, today) }));
   const count = (s) => todayRecs.filter((x) => x.rec.status === s).length;
-  const ym = ymOf();
+  const ym = cycleMonthOf(today, cycleStartOf(db));
   const upcoming = db.leaveRequests.filter((r) => ids.has(r.empId) && ['Approved', 'Pending'].includes(r.status) && r.to >= today && r.from <= addDays(today, 30));
 
   return (
@@ -45,7 +46,7 @@ export default function Team({ user }) {
             <Stat label="In today" value={count('Present') + count('WFH')} tone="green" sub={`${count('WFH')} working remotely`} />
             <Stat label="On leave" value={count('Leave')} tone="amber" />
             <Stat label="Not clocked in yet" value={count('Not clocked in')} />
-            <Stat label="Late arrivals today" value={todayRecs.filter((x) => x.rec.clockIn && x.rec.clockIn > (x.rec.shift?.start || '09:30')).length} tone="red" />
+            <Stat label="Late arrivals today" value={todayRecs.filter((x) => x.rec.late).length} tone="red" />
           </div>
           <Card pad={false} title="Today">
             <DataTable
@@ -64,7 +65,7 @@ export default function Team({ user }) {
         </div>
       )}
       {tab === 'attendance' && (
-        <Card pad={false} title={`This month (${ym})`}>
+        <Card pad={false} title={`${monthLabel(ym)} cycle (${cycleLabel(ym, cycleStartOf(db))})`}>
           <DataTable
             rows={team.map((e) => ({ emp: e, st: attendanceStats(monthRecords(db, e.id, ym).filter((r) => r.date <= today)) }))}
             rowKey={(r) => r.emp.id}
@@ -76,6 +77,7 @@ export default function Team({ user }) {
               { key: 'wfh', label: 'WFH', sortValue: (r) => r.st.wfh, render: (r) => r.st.wfh },
               { key: 'leave', label: 'Leave', sortValue: (r) => r.st.leave, render: (r) => r.st.leave },
               { key: 'absent', label: 'Absent', sortValue: (r) => r.st.absent, render: (r) => r.st.absent },
+              { key: 'action', label: 'Action required', sortValue: (r) => r.st.action, render: (r) => r.st.action },
             ]}
           />
         </Card>
@@ -100,7 +102,7 @@ export default function Team({ user }) {
               rows={team}
               columns={[
                 { key: 'emp', label: 'Employee', sortValue: (e) => e.firstName, render: (e) => <EmpChip emp={e} /> },
-                ...db.leaveTypes.filter((t) => ['CL', 'SL', 'EL'].includes(t.code)).map((t) => ({ key: t.id, label: t.code, sortable: false, render: (e) => leaveBalances(db, e.id).find((b) => b.type.id === t.id)?.available ?? '—' })),
+                ...db.leaveTypes.filter((t) => ['CL', 'SL', 'PL'].includes(t.code)).map((t) => ({ key: t.id, label: t.code, sortable: false, render: (e) => leaveBalances(db, e.id).find((b) => b.type.id === t.id)?.available ?? '—' })),
               ]}
             />
           </Card>

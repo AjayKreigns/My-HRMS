@@ -1,10 +1,23 @@
 import { useState } from 'react';
 import { useDB, update, notify, uid } from '../store.js';
 import { Card, Btn, Badge, Tabs, EmpChip, Empty, PageHead, Modal, toast, DateRange } from '../ui.jsx';
-import { empById, fmtDate, fmtTime, money, todayISO } from '../utils.js';
+import { empById, fmtDate, fmtTime, money, todayISO, hm, minutesBetween } from '../utils.js';
 
 const SOURCES = [
-  { col: 'leaveRequests', kind: 'Leave', title: (r, db) => `${db.leaveTypes.find((t) => t.id === r.typeId)?.name || 'Leave'} · ${r.days} day(s)`, detail: (r) => <><DateRange from={r.from} to={r.to} /> — {r.reason}</> },
+  {
+    col: 'leaveRequests',
+    kind: 'Leave',
+    title: (r, db) => `${db.leaveTypes.find((t) => t.id === r.typeId)?.name || 'Leave'} · ${r.partial ? hm(minutesBetween(r.fromTime, r.toTime)) : `${r.days} day(s)`}`,
+    detail: (r) => (
+      <>
+        {r.partial ? `${fmtDate(r.from)}, ${fmtTime(r.fromTime)} – ${fmtTime(r.toTime)}` : <DateRange from={r.from} to={r.to} />} — {r.reason}
+        {r.lopDays > 0 && ` · ${r.lopDays} day(s) will be Loss of Pay`}
+        {(r.sandwichDates || []).length > 0 && ` · includes ${r.sandwichDates.length} weekly off / holiday day(s) (sandwich rule)`}
+        {r.certificateDue && ' · medical certificate due'}
+        {r.viaAttendance && ` · applied from the attendance log for ${fmtDate(r.viaAttendance)}`}
+      </>
+    ),
+  },
   { col: 'attendanceRequests', kind: 'Attendance', title: (r) => r.type, detail: (r) => <><DateRange from={r.date} to={r.to} />{r.clockIn ? ` · ${fmtTime(r.clockIn)} – ${fmtTime(r.clockOut)}` : ''} — {r.reason}</> },
   { col: 'overtime', kind: 'Overtime', title: (r) => `Overtime · ${r.hours}h`, detail: (r) => `${fmtDate(r.date)} — ${r.reason}` },
   { col: 'compOffRequests', kind: 'Comp off', title: (r) => `Comp off · ${r.days} day(s)`, detail: (r) => `Worked on ${fmtDate(r.workedOn)} — ${r.reason}` },

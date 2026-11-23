@@ -3,10 +3,11 @@
 // loans, benefits, reports and settings.
 import { useEffect, useMemo, useState } from 'react';
 import { useDB, addItem, patchItem, removeItem, update, uid, notify } from '../store.js';
-import { Icon, Btn, Badge, DataTable, FormModal, EmpChip, Crud, Modal, FormGrid, toast, confirmAction, exportCSV } from '../ui.jsx';
+import { Icon, Btn, Badge, DataTable, FormModal, EmpChip, Crud, Modal, FormGrid, Tabs, toast, confirmAction, exportCSV } from '../ui.jsx';
 import { PayslipView, DECLARATION_FIELDS } from './Finances.jsx';
 import { ApproveButtons, empCol } from './AdminOps.jsx';
-import { empById, fullName, fmtDate, money, monthLabel, payslipFor, ymOf, addMonths, addDays, todayISO, declarationTotal, cycleRange, cycleDays, payrollPeople, salaryBreakup, MONTHS, pad } from '../utils.js';
+import { empById, fullName, fmtDate, money, monthLabel, payslipFor, ymOf, addMonths, addDays, todayISO, declarationTotal, cycleRange, cycleDays, payrollPeople, salaryBreakup, breakupFor, snapshotPayroll, payGroupOf, structureOf, settingsFor, structureFromSettings, groupFromSettings, COMPONENT_TYPES, MONTHS, pad } from '../utils.js';
+import { payrollRegister } from '../register.js';
 import '../payroll.css';
 
 // ---------- helpers ----------
@@ -680,7 +681,7 @@ function GeoDifferentials({ db }) {
 const STEPS = [
   { key: 'attendance', title: 'Leave, Attendance & Payable Units', icon: 'calendar', tone: '#62c1d1' },
   { key: 'joinees', title: 'New Joinees & Exits', icon: 'userPlus', tone: '#c47bc4' },
-  { key: 'bonus', title: 'Bonus, Salary Revisions & Overtime', icon: 'briefcase', tone: '#8d93d8' },
+  { key: 'bonus', title: 'Bonus & Salary Revisions', icon: 'briefcase', tone: '#8d93d8' },
   { key: 'reimbursement', title: 'Reimbursement, Adhoc Payment, Deduction', icon: 'calc', tone: '#5ea9e0' },
   { key: 'hold', title: 'Salaries on Hold & Arrears', icon: 'hourglass', tone: '#a5bf3a' },
   { key: 'override', title: 'Override (PT, ESI, TDS, LWF)', icon: 'userCheck', tone: '#e2b84b' },
@@ -749,7 +750,9 @@ function RunPayroll({ user, month }) {
   const lock = () => {
     if (!confirmAction(`Lock payroll for ${monthLabel(ym)}? Inputs can't be changed after this.`)) return;
     update((d) => {
-      Object.assign(touchRun(d, ym), { status: 'Finalized', lockedAt: new Date().toISOString(), lockedBy: user.id });
+      const r = Object.assign(touchRun(d, ym), { status: 'Finalized', lockedAt: new Date().toISOString(), lockedBy: user.id });
+      // Freeze the payslips: later changes to salaries, structures or leave rules do not touch this month.
+      r.snapshot = snapshotPayroll(d, ym);
       logActivity(d, ym, user, 'Locked payroll');
     });
     toast(`Payroll locked for ${monthLabel(ym)}`);
@@ -765,7 +768,8 @@ function RunPayroll({ user, month }) {
   const unlock = () => {
     if (!confirmAction(`Unlock payroll for ${monthLabel(ym)}?`)) return;
     update((d) => {
-      Object.assign(touchRun(d, ym), { status: 'Processed', dirty: true });
+      const r = Object.assign(touchRun(d, ym), { status: 'Processed', dirty: true });
+      delete r.snapshot; // payslips recalculate from live data again until it is locked
       logActivity(d, ym, user, 'Unlocked payroll');
     });
   };
@@ -932,6 +936,9 @@ function RunPayroll({ user, month }) {
               <button className="pr-btn" onClick={() => setModal('review')}>
                 Review all employees
               </button>
+              <button className="pr-btn" onClick={() => setModal('register')}>
+                Payroll register
+              </button>
               {!done && (
                 <button className="pr-btn pr-btn-fill" disabled={!canLock || upcoming} onClick={lock} title={canLock ? '' : 'Process payroll and fix all errors first'}>
                   Lock Payroll
@@ -1010,6 +1017,7 @@ function RunPayroll({ user, month }) {
           />
         </Modal>
       )}
+      {modal === 'register' && <RegisterModal db={db} ym={ym} onClose={() => setModal(null)} />}
       {modal === 'review' && (
         <Modal
           title={`Review all employees — ${monthLabel(ym)}`}
@@ -1046,12 +1054,67 @@ function RunPayroll({ user, month }) {
   );
 }
 
+// Download the payroll register for the month, for all pay groups or one.
+function RegisterModal({ db, ym, onClose }) {
+  const [groupId, setGroupId] = useState('');
+  const reg = useMemo(() => payrollRegister(db, ym, groupId), [db, ym, groupId]);
+  const group = (db.payGroups || []).find((g) => g.id === groupId);
+  const download = () => exportCSV(`payroll-register-${ym}${group ? `-${group.name.replace(/\s+/g, '-').toLowerCase()}` : ''}`, reg.columns, reg.rows);
+  return (
+    <Modal
+      title={`Payroll register — ${monthLabel(ym)}`}
+      onClose={onClose}
+      footer={
+        <Btn icon="download" disabled={!reg.count} onClick={download}>
+          Download register (CSV)
+        </Btn>
+      }
+    >
+      <div className="field">
+        <label htmlFor="reg_group">Pay group</label>
+        <select id="reg_group" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+          <option value="">All pay groups</option>
+          {(db.payGroups || []).map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <table className="pr-breakup" style={{ marginTop: 12 }}>
+        <tbody>
+          <tr>
+            <td>Employees</td>
+            <td>{reg.count}</td>
+          </tr>
+          <tr>
+            <td>Gross earnings</td>
+            <td>{inr(reg.totals.gross)}</td>
+          </tr>
+          <tr>
+            <td>Total deductions</td>
+            <td>{inr(reg.totals.deductions)}</td>
+          </tr>
+          <tr className="total-row">
+            <td>Net pay</td>
+            <td>{inr(reg.totals.net)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="pr-muted" style={{ marginTop: 12 }}>
+        One row per employee with every earning, deduction and employer cost, and a totals row. Opens in Excel.
+        {isDone(db.payrollRuns.find((r) => r.month === ym)) ? ' This month is locked, so the register matches the payslips that were issued.' : ' This month is not locked yet, so the numbers can still change.'}
+      </p>
+    </Modal>
+  );
+}
+
 function Tour({ onClose }) {
   const [i, setI] = useState(0);
   const ABOUT = {
     attendance: 'Check paid days and loss-of-pay for everyone in the cycle.',
     joinees: 'Confirm who joined or left during the cycle; their pay is worked out for the days they were here.',
-    bonus: 'Add bonuses, pay approved overtime and check salary revisions that take effect this month.',
+    bonus: 'Add bonuses and check salary revisions that take effect this month.',
     reimbursement: 'Pay approved claims and expenses through payroll, and add one-off payments or deductions.',
     hold: "Hold an employee's salary for this month or add arrears from earlier months.",
     override: 'Replace the calculated PT, ESI, TDS or LWF for an employee when needed.',
@@ -1224,23 +1287,29 @@ function StepModal({ step, ym, user, t, locked, range, onClose }) {
           </div>
           <DataTable rows={revisions} empty="No revisions take effect in this cycle." columns={[empCol(db), { key: 'newDesignation', label: 'Job title' }, { key: 'oldCtc', label: 'Old CTC', render: (p) => money(p.oldCtc) }, { key: 'newCtc', label: 'New CTC', render: (p) => money(p.newCtc) }, { key: 'effectiveFrom', label: 'Effective', render: (p) => fmtDate(p.effectiveFrom) }, { key: 'status', label: 'Status', render: (p) => <Badge>{p.status}</Badge> }]} />
         </div>
-        <div className="pr-sec">
-          <div className="pr-sec-head">
-            <h4>Approved overtime</h4>
-          </div>
-          <DataTable
-            rows={ot}
-            empty="No approved overtime in this cycle."
-            columns={[
-              empCol(db),
-              { key: 'date', label: 'Date', render: (o) => fmtDate(o.date) },
-              { key: 'hours', label: 'Hours' },
-              { key: 'amt', label: `Pay at ${rate}×`, sortable: false, render: (o) => money(otPay(o)) },
-              { key: 'act', label: '', sortable: false, render: (o) => (o.paidIn ? <Badge tone="green">{`Added to ${shortMonth(o.paidIn)}`}</Badge> : !locked && <PayNowButton onClick={() => payOt(o)} />) },
-            ]}
-          />
-        </div>
-        <AdjList db={db} ym={ym} kinds={['Overtime']} title="Overtime payouts" locked={locked} changed={changed} />
+        {db.attendanceSettings?.overtimeEnabled ? (
+          <>
+            <div className="pr-sec">
+              <div className="pr-sec-head">
+                <h4>Approved overtime</h4>
+              </div>
+              <DataTable
+                rows={ot}
+                empty="No approved overtime in this cycle."
+                columns={[
+                  empCol(db),
+                  { key: 'date', label: 'Date', render: (o) => fmtDate(o.date) },
+                  { key: 'hours', label: 'Hours' },
+                  { key: 'amt', label: `Pay at ${rate}×`, sortable: false, render: (o) => money(otPay(o)) },
+                  { key: 'act', label: '', sortable: false, render: (o) => (o.paidIn ? <Badge tone="green">{`Added to ${shortMonth(o.paidIn)}`}</Badge> : !locked && <PayNowButton onClick={() => payOt(o)} />) },
+                ]}
+              />
+            </div>
+            <AdjList db={db} ym={ym} kinds={['Overtime']} title="Overtime payouts" locked={locked} changed={changed} />
+          </>
+        ) : (
+          <p className="pr-muted">Overtime is switched off in Attendance settings, so there is nothing to pay.</p>
+        )}
       </>
     );
   } else if (step.key === 'reimbursement') {
@@ -1392,7 +1461,7 @@ function PayrollAdmin({ db, user, sub }) {
   const [revise, setRevise] = useState(null);
   const sumDed = (prefix) => sumOf(t.slips, (x) => x.deductions.find((d) => d[0].startsWith(prefix))?.[1] || 0);
   const run = db.payrollRuns.find((r) => r.month === ym);
-  const br = (e) => salaryBreakup(e.ctc, db.payrollSettings);
+  const br = (e) => breakupFor(db, e);
 
   let body;
   if (sub === 'history') {
@@ -1413,7 +1482,9 @@ function PayrollAdmin({ db, user, sub }) {
     );
   } else if (sub === 'salaries') {
     const people = db.employees.filter((e) => e.status !== 'Exited');
-    const cols = [{ label: 'Employee', csv: (e) => fullName(e) }, { label: 'Emp no', csv: (e) => e.empNo }, { label: 'Annual CTC', csv: (e) => e.ctc }, ...br({ ctc: 0 }).earnings.map(([k], i) => ({ label: k, csv: (e) => Math.round(br(e).earnings[i][1]) }))];
+    // Components differ between structures, so the columns are the union of every structure's components.
+    const compNames = [...new Set(people.flatMap((e) => br(e).earnings.map(([k]) => k)))];
+    const cols = [{ label: 'Employee', csv: (e) => fullName(e) }, { label: 'Emp no', csv: (e) => e.empNo }, { label: 'Pay group', csv: (e) => payGroupOf(db, e)?.name }, { label: 'Structure', csv: (e) => structureOf(db, e)?.name }, { label: 'Annual CTC', csv: (e) => e.ctc }, ...compNames.map((k) => ({ label: k, csv: (e) => Math.round(br(e).earnings.find(([n]) => n === k)?.[1] || 0) }))];
     body = (
       <Panel title="Employee salaries" right={<Btn kind="ghost" small icon="download" onClick={() => exportCSV('employee-salaries', cols, people)}>Export</Btn>}>
         <DataTable
@@ -1423,6 +1494,8 @@ function PayrollAdmin({ db, user, sub }) {
           columns={[
             { key: 'emp', label: 'Employee', sortValue: (e) => fullName(e), render: (e) => <EmpChip emp={e} sub={e.empNo} /> },
             { key: 'band', label: 'Band', render: (e) => bandOf(db, e)?.name || '—' },
+            { key: 'group', label: 'Pay group', sortable: false, render: (e) => payGroupOf(db, e)?.name || '—' },
+            { key: 'structure', label: 'Structure', sortable: false, render: (e) => structureOf(db, e)?.name || '—' },
             { key: 'ctc', label: 'Annual CTC', render: (e) => inr(e.ctc) },
             { key: 'gross', label: 'Monthly gross', sortable: false, render: (e) => inr(br(e).gross) },
             { key: 'basic', label: 'Basic', sortable: false, render: (e) => inr(br(e).earnings[0][1]) },
@@ -1459,7 +1532,7 @@ function PayrollAdmin({ db, user, sub }) {
     );
   } else if (sub === 'statutory') {
     const ee = (x) => x.deductions.find((d) => d[0].startsWith('Provident'))?.[1] || 0;
-    const epf = (x) => Math.min(x.earnings[0][1], db.payrollSettings.pfCeiling);
+    const epf = (x) => Math.min(x.earnings[0][1], settingsFor(db, x.emp).pfCeiling);
     const ecr = [{ label: 'UAN', csv: (x) => x.emp.uan }, { label: 'Name', csv: (x) => fullName(x.emp) }, { label: 'Gross wages', csv: (x) => Math.round(x.gross) }, { label: 'EPF wages', csv: (x) => Math.round(epf(x)) }, { label: 'EE share', csv: (x) => Math.round(ee(x)) }, { label: 'ER share', csv: (x) => Math.round(x.employer[0][1]) }];
     body = (
       <div className="pr-stack">
@@ -1731,12 +1804,12 @@ function Reports({ db }) {
     exportCSV(`variance-${ym}`, [...base, { label: 'Previous net', csv: (x) => Math.round(prevNet(prev, x)) }, { label: 'This month net', csv: (x) => Math.round(x.net) }, { label: 'Difference', csv: (x) => Math.round(x.net - prevNet(prev, x)) }], slips());
   };
   const REPORTS = [
-    ['Payroll register', 'Every earning and deduction for each employee.', () => exportCSV(`payroll-register-${ym}`, [...base, { label: 'Paid days', csv: (x) => x.paidDays }, ...salaryBreakup(0, db.payrollSettings).earnings.map(([k], i) => ({ label: k, csv: (x) => Math.round(x.earnings[i][1]) })), { label: 'Gross', csv: (x) => Math.round(x.gross) }, { label: 'PF', csv: ded('Provident') }, { label: 'ESI', csv: ded('ESI') }, { label: 'PT', csv: ded('Professional') }, { label: 'LWF', csv: ded('Labour') }, { label: 'TDS', csv: ded('Income') }, { label: 'Total deductions', csv: (x) => Math.round(x.totalDed) }, { label: 'Net pay', csv: (x) => Math.round(x.net) }], slips())],
+    ['Payroll register', 'Every earning, deduction and employer cost for each employee, with totals.', () => { const reg = payrollRegister(db, ym); exportCSV(`payroll-register-${ym}`, reg.columns, reg.rows); }],
     ['Bank transfer statement', 'Account details and net pay for the bank upload.', () => exportCSV(`bank-transfer-${ym}`, [...base, { label: 'Account holder', csv: (x) => x.emp.bank?.accountHolder }, { label: 'Bank', csv: (x) => x.emp.bank?.bankName }, { label: 'Account number', csv: (x) => x.emp.bank?.accountNumber }, { label: 'IFSC', csv: (x) => x.emp.bank?.ifsc }, { label: 'Net pay', csv: (x) => Math.round(x.net) }], slips().filter((x) => !x.onHold))],
-    ['PF ECR', 'Provident fund wages and shares for the ECR upload.', () => exportCSV(`pf-ecr-${ym}`, [{ label: 'UAN', csv: (x) => x.emp.uan }, ...base, { label: 'Gross wages', csv: (x) => Math.round(x.gross) }, { label: 'EPF wages', csv: (x) => Math.round(Math.min(x.earnings[0][1], db.payrollSettings.pfCeiling)) }, { label: 'EE share', csv: ded('Provident') }, { label: 'ER share', csv: (x) => Math.round(x.employer[0][1]) }], slips())],
+    ['PF ECR', 'Provident fund wages and shares for the ECR upload.', () => exportCSV(`pf-ecr-${ym}`, [{ label: 'UAN', csv: (x) => x.emp.uan }, ...base, { label: 'Gross wages', csv: (x) => Math.round(x.gross) }, { label: 'EPF wages', csv: (x) => Math.round(Math.min(x.earnings[0][1], settingsFor(db, x.emp).pfCeiling)) }, { label: 'EE share', csv: ded('Provident') }, { label: 'ER share', csv: (x) => Math.round(x.employer[0][1]) }], slips())],
     ['ESI contribution', 'Employees covered by ESI and their contributions.', () => exportCSV(`esi-${ym}`, [...base, { label: 'ESI number', csv: (x) => x.emp.esiNumber }, { label: 'Gross', csv: (x) => Math.round(x.gross) }, { label: 'Employee 0.75%', csv: ded('ESI') }], slips().filter((x) => ded('ESI')(x) > 0))],
     ['Professional tax', 'PT deducted for each employee.', () => exportCSV(`pt-${ym}`, [...base, { label: 'Gross', csv: (x) => Math.round(x.gross) }, { label: 'PT', csv: ded('Professional') }], slips())],
-    ['Labour welfare fund', 'LWF deducted this month.', () => exportCSV(`lwf-${ym}`, [...base, { label: 'Employee LWF', csv: ded('Labour') }, { label: 'Employer LWF', csv: () => Number(db.payrollSettings.lwfEmployer || 0) }], slips().filter((x) => ded('Labour')(x) > 0))],
+    ['Labour welfare fund', 'LWF deducted this month.', () => exportCSV(`lwf-${ym}`, [...base, { label: 'Employee LWF', csv: ded('Labour') }, { label: 'Employer LWF', csv: (x) => Number(settingsFor(db, x.emp).lwfEmployer || 0) }], slips().filter((x) => ded('Labour')(x) > 0))],
     ['TDS summary', 'Income tax deducted, with PAN and tax regime.', () => exportCSV(`tds-${ym}`, [...base, { label: 'PAN', csv: (x) => x.emp.pan }, { label: 'Regime', csv: (x) => x.regime }, { label: 'TDS', csv: ded('Income') }], slips())],
     ['CTC report', 'Annual CTC, band and department of every employee.', () => exportCSV('ctc-report', [{ label: 'Employee', csv: (e) => fullName(e) }, { label: 'Emp no', csv: (e) => e.empNo }, { label: 'Department', csv: (e) => e.department }, { label: 'Band', csv: (e) => bandOf(db, e)?.name }, { label: 'Annual CTC', csv: (e) => e.ctc }], db.employees.filter((e) => e.status !== 'Exited'))],
     ['Variance report', 'Change in net pay against the month before.', variance],
@@ -1765,38 +1838,385 @@ function Reports({ db }) {
   );
 }
 
-// ---------- settings ----------
-const PAYROLL_SETTING_FIELDS = [
-  { key: 'payGroup', label: 'Pay group name', section: 'Pay cycle' },
-  { key: 'cycleStartDay', label: 'Pay cycle starts on day', type: 'number', min: 1, max: 28, help: '26 means November payroll covers 26 Oct – 25 Nov. Use 1 for calendar months.', section: 'Pay cycle' },
-  { key: 'payDay', label: 'Pay day', type: 'select', options: ['Last working day', '1st of next month', '7th of next month'], section: 'Pay cycle' },
-  { key: 'lockDay', label: 'Attendance & inputs lock day', type: 'number', section: 'Pay cycle' },
-  { key: 'basicPct', label: 'Basic (% of CTC)', type: 'number', section: 'Salary structure' },
-  { key: 'hraPct', label: 'HRA (% of basic)', type: 'number', section: 'Salary structure' },
-  { key: 'conveyance', label: 'Conveyance allowance / month', type: 'number', section: 'Salary structure' },
-  { key: 'medical', label: 'Medical allowance / month', type: 'number', section: 'Salary structure' },
-  { key: 'pfEnabled', label: 'Provident Fund enabled', type: 'checkbox', section: 'Statutory' },
-  { key: 'pfCeiling', label: 'PF wage ceiling', type: 'number', section: 'Statutory' },
-  { key: 'esiEnabled', label: 'ESI enabled (gross up to ₹21,000)', type: 'checkbox', section: 'Statutory' },
-  { key: 'ptEnabled', label: 'Professional tax enabled', type: 'checkbox', section: 'Statutory' },
-  { key: 'ptAmount', label: 'Professional tax / month', type: 'number', section: 'Statutory' },
-  { key: 'lwfEnabled', label: 'Labour welfare fund enabled', type: 'checkbox', section: 'Statutory' },
-  { key: 'lwfEmployee', label: 'LWF employee share', type: 'number', section: 'Statutory' },
-  { key: 'lwfEmployer', label: 'LWF employer share', type: 'number', section: 'Statutory' },
+// ---------- settings: pay cycle, pay groups, pay structures ----------
+const GROUP_FIELDS = [
+  { key: 'name', label: 'Pay group name', required: true, section: 'Pay group' },
+  { key: 'structureId', label: 'Default pay structure', type: 'select', required: true, options: (db) => (db.payStructures || []).map((s) => ({ value: s.id, label: s.name })), help: 'An employee can have a different structure on their profile.' },
+  { key: 'description', label: 'Description', full: true },
+  { key: 'payDay', label: 'Pay day', type: 'select', options: ['Last working day', '1st of next month', '7th of next month'], section: 'Pay and lock' },
+  { key: 'lockDay', label: 'Attendance & inputs lock day', type: 'number' },
+  { key: 'pfEnabled', label: 'Provident Fund applies', type: 'checkbox', section: 'Statutory deductions' },
+  { key: 'pfCeiling', label: 'PF wage ceiling', type: 'number', show: (v) => v.pfEnabled },
+  { key: 'esiEnabled', label: 'ESI applies (gross up to ₹21,000)', type: 'checkbox' },
+  { key: 'ptEnabled', label: 'Professional tax applies', type: 'checkbox' },
+  { key: 'ptAmount', label: 'Professional tax / month', type: 'number', show: (v) => v.ptEnabled },
+  { key: 'lwfEnabled', label: 'Labour welfare fund applies', type: 'checkbox' },
+  { key: 'lwfEmployee', label: 'LWF employee share', type: 'number', show: (v) => v.lwfEnabled },
+  { key: 'lwfEmployer', label: 'LWF employer share', type: 'number', show: (v) => v.lwfEnabled },
 ];
 
-function PayrollSettings({ db }) {
-  const [v, setV] = useState(db.payrollSettings);
+// Mark one pay group / structure as the default for employees who have none of their own.
+function makeDefault(col, item) {
+  update((d) => {
+    d[col].forEach((x) => (x.isDefault = x.id === item.id));
+  });
+  toast(`${item.name} is now the default`);
+}
+
+function PayGroups({ db }) {
+  const [editing, setEditing] = useState(null);
+  const [members, setMembers] = useState(null);
+  const groups = db.payGroups || [];
+  const inGroup = (g, activeOnly = true) => db.employees.filter((e) => (!activeOnly || e.status !== 'Exited') && payGroupOf(db, e)?.id === g.id);
+
+  const remove = (g) => {
+    if (groups.length <= 1) return toast('At least one pay group is needed.', 'error');
+    if (g.isDefault) return toast('This is the default pay group. Make another group the default first.', 'error');
+    const n = inGroup(g, false).length;
+    if (n > 0) return toast(`${n} employee(s) are in ${g.name}. Move them to another pay group first (Members).`, 'error');
+    if (!confirmAction(`Delete the pay group ${g.name}?`)) return;
+    update((d) => {
+      d.payGroups = d.payGroups.filter((x) => x.id !== g.id);
+    });
+    toast('Pay group deleted');
+  };
+  const save = (v) => {
+    // Leave the id out when adding: an `id: undefined` would overwrite the one addItem makes.
+    const { id: _unused, isDefault: _d, ...data } = v;
+    ['lockDay', 'pfCeiling', 'ptAmount', 'lwfEmployee', 'lwfEmployer'].forEach((k) => {
+      if (data[k] !== '' && data[k] !== undefined) data[k] = Number(data[k]);
+    });
+    if (editing.id) patchItem('payGroups', editing.id, data);
+    else addItem('payGroups', data);
+    setEditing(null);
+    toast('Pay group saved');
+  };
+  const saveMembers = (v) => {
+    const sel = v.members || [];
+    const fallback = groups.find((x) => x.id !== members.id)?.id;
+    update((d) => {
+      d.employees.forEach((e) => {
+        if (e.status === 'Exited') return;
+        if (sel.includes(e.id)) e.payGroupId = members.id;
+        else if (payGroupOf(d, e)?.id === members.id && fallback) e.payGroupId = fallback;
+      });
+    });
+    setMembers(null);
+    toast('Members updated');
+  };
+  const statutory = (g) => [g.pfEnabled && 'PF', g.esiEnabled && 'ESI', g.ptEnabled && 'PT', g.lwfEnabled && 'LWF'].filter(Boolean).join(' · ') || 'None';
+
+  return (
+    <Panel
+      title="Pay groups"
+      right={
+        <Btn small icon="plus" onClick={() => setEditing({ ...groupFromSettings(db.payrollSettings), id: undefined, name: '', description: '', structureId: (db.payStructures || [])[0]?.id })}>
+          Add pay group
+        </Btn>
+      }
+    >
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        A pay group is a set of employees paid on the same terms: the same pay day and the same statutory deductions. All groups share the pay cycle.
+      </p>
+      <DataTable
+        rows={groups}
+        columns={[
+          { key: 'name', label: 'Pay group', render: (g) => (<span>{g.name}{g.isDefault && <> <Badge tone="blue">Default</Badge></>}</span>) },
+          { key: 'structure', label: 'Default structure', sortable: false, render: (g) => (db.payStructures || []).find((s) => s.id === g.structureId)?.name || '—' },
+          { key: 'payDay', label: 'Pay day' },
+          { key: 'stat', label: 'Statutory', sortable: false, render: statutory },
+          { key: 'people', label: 'Employees', sortable: false, render: (g) => inGroup(g).length },
+          {
+            key: '_a',
+            label: '',
+            sortable: false,
+            align: 'right',
+            render: (g) => (
+              <span className="row-actions">
+                {!g.isDefault && (
+                  <Btn kind="ghost" small onClick={() => makeDefault('payGroups', g)}>
+                    Make default
+                  </Btn>
+                )}
+                <Btn kind="ghost" small onClick={() => setMembers(g)}>
+                  Members
+                </Btn>
+                <Btn kind="icon" icon="edit" title="Edit" aria-label={`Edit ${g.name}`} onClick={() => setEditing({ ...g })} />
+                <Btn kind="icon" icon="trash" title="Delete" aria-label={`Delete ${g.name}`} onClick={() => remove(g)} />
+              </span>
+            ),
+          },
+        ]}
+      />
+      {editing && <FormModal title={editing.id ? `Edit ${editing.name}` : 'Add pay group'} fields={GROUP_FIELDS} initial={editing} onClose={() => setEditing(null)} onSave={save} wide />}
+      {members && (
+        <FormModal
+          title={`Members of ${members.name}`}
+          fields={[{ key: 'members', label: 'Employees in this pay group', type: 'multiemployee', full: true, help: groups.length > 1 ? 'Anyone you untick moves to another pay group.' : '' }]}
+          initial={{ members: inGroup(members).map((e) => e.id) }}
+          onClose={() => setMembers(null)}
+          onSave={saveMembers}
+          wide
+        />
+      )}
+    </Panel>
+  );
+}
+
+const money0 = (n) => inr(n);
+
+// Editor for one pay structure: the earning components and how each is worked out.
+function StructureEditor({ db, st, onClose }) {
+  const [v, setV] = useState(() => ({
+    name: st.name || '',
+    description: st.description || '',
+    employerPf: st.employerPf !== false,
+    gratuity: st.gratuity !== false,
+    gratuityPct: st.gratuityPct ?? 4.81,
+    components: (st.components || []).map((c) => ({ ...c })),
+  }));
+  const [sample, setSample] = useState(600000);
+  const [error, setError] = useState('');
+  const setComp = (i, ch) => setV((s) => ({ ...s, components: s.components.map((c, j) => (j === i ? { ...c, ...ch } : c)) }));
+  const setHra = (i) => setV((s) => ({ ...s, components: s.components.map((c, j) => ({ ...c, role: j === 0 ? 'basic' : j === i ? (c.role === 'hra' ? '' : 'hra') : c.role === 'hra' ? '' : c.role })) }));
+  const draft = { ...v, components: v.components.map((c, i) => ({ ...c, role: i === 0 ? 'basic' : c.role })) };
+  const preview = salaryBreakup(Number(sample) || 0, db.payrollSettings, draft);
+  const balance = v.components.findIndex((c) => c.type === 'Balance');
+
+  const validate = () => {
+    if (!v.name.trim()) return 'Give the structure a name.';
+    if ((db.payStructures || []).some((x) => x.id !== st.id && x.name.trim().toLowerCase() === v.name.trim().toLowerCase())) return 'Another structure already has that name.';
+    if (!v.components.length) return 'Add at least one component.';
+    if (v.components[0].type === 'Balance' || v.components[0].type === 'Percent of Basic') return 'The first component is Basic, so it must be a percent of CTC or a fixed amount.';
+    const names = v.components.map((c) => c.name.trim().toLowerCase());
+    if (names.some((n) => !n)) return 'Every component needs a name.';
+    if (new Set(names).size !== names.length) return 'Two components have the same name.';
+    if (v.components.filter((c) => c.type === 'Balance').length > 1) return 'Only one component can be the balance.';
+    const bad = v.components.find((c) => c.type !== 'Balance' && (Number(c.value) < 0 || (c.type.startsWith('Percent') && Number(c.value) > 100) || c.value === '' || c.value === undefined));
+    if (bad) return `Check the value of ${bad.name || 'a component'}.`;
+    return '';
+  };
   const save = () => {
-    update((d) => (d.payrollSettings = { ...v, cycleStartDay: Math.min(28, Math.max(1, Number(v.cycleStartDay) || 1)) }));
-    toast('Payroll settings saved');
+    const err = validate();
+    if (err) return setError(err);
+    const components = v.components.map((c, i) => ({ id: c.id || uid('c'), name: c.name.trim(), type: c.type, value: c.type === 'Balance' ? 0 : Number(c.value), role: i === 0 ? 'basic' : c.role === 'hra' ? 'hra' : '' }));
+    const data = { name: v.name.trim(), description: v.description, employerPf: v.employerPf, gratuity: v.gratuity, gratuityPct: Number(v.gratuityPct) || 0, components };
+    if (st.id) patchItem('payStructures', st.id, data);
+    else addItem('payStructures', data);
+    toast('Pay structure saved');
+    onClose();
+  };
+
+  return (
+    <Modal
+      title={st.id ? `Edit ${st.name}` : 'Add pay structure'}
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <Btn kind="ghost" onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn onClick={save}>Save structure</Btn>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor="ps_name">
+            Structure name<span className="req">*</span>
+          </label>
+          <input id="ps_name" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />
+        </div>
+        <div className="field">
+          <label htmlFor="ps_desc">Description</label>
+          <input id="ps_desc" value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} />
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={v.employerPf} onChange={(e) => setV({ ...v, employerPf: e.target.checked })} /> Employer PF is part of the CTC
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={v.gratuity} onChange={(e) => setV({ ...v, gratuity: e.target.checked })} /> Gratuity is part of the CTC
+        </label>
+        {v.gratuity && (
+          <div className="field">
+            <label htmlFor="ps_grat">Gratuity (% of basic)</label>
+            <input id="ps_grat" type="number" step="0.01" value={v.gratuityPct} onChange={(e) => setV({ ...v, gratuityPct: e.target.value })} />
+          </div>
+        )}
+      </div>
+
+      <h4 className="form-section" style={{ marginTop: 16 }}>
+        Earning components
+      </h4>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>How it is worked out</th>
+              <th>Value</th>
+              <th title="Used for the HRA exemption under the old tax regime">HRA</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {v.components.map((c, i) => (
+              <tr key={c.id || i}>
+                <td data-label="Component">
+                  <input className="input-sm" aria-label={`Component ${i + 1} name`} value={c.name} disabled={i === 0} onChange={(e) => setComp(i, { name: e.target.value })} />
+                </td>
+                <td data-label="How it is worked out">
+                  <select className="select-sm" aria-label={`${c.name || 'Component'} type`} value={c.type} onChange={(e) => setComp(i, { type: e.target.value })}>
+                    {COMPONENT_TYPES.filter((t) => i > 0 || (t !== 'Balance' && t !== 'Percent of Basic')).map((t) => (
+                      <option key={t} value={t}>
+                        {{ 'Percent of CTC': '% of CTC', 'Percent of Basic': '% of Basic', Fixed: 'Fixed per month', Balance: 'Balance of CTC' }[t]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td data-label="Value">
+                  {c.type === 'Balance' ? (
+                    <span className="pr-muted">the rest</span>
+                  ) : (
+                    <input className="input-sm" type="number" min="0" step="any" aria-label={`${c.name || 'Component'} value`} value={c.value ?? ''} onChange={(e) => setComp(i, { value: e.target.value })} />
+                  )}
+                </td>
+                <td data-label="HRA">{i > 0 ? <input type="checkbox" aria-label={`${c.name} is HRA`} checked={c.role === 'hra'} onChange={() => setHra(i)} /> : '—'}</td>
+                <td>{i > 0 && <Btn kind="icon" icon="trash" title="Remove" aria-label={`Remove ${c.name}`} onClick={() => setV((s) => ({ ...s, components: s.components.filter((_, j) => j !== i) }))} />}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <Btn kind="ghost" small icon="plus" onClick={() => setV((s) => ({ ...s, components: [...s.components, { id: uid('c'), name: '', type: 'Fixed', value: 0, role: '' }] }))}>
+          Add component
+        </Btn>
+      </div>
+
+      <h4 className="form-section" style={{ marginTop: 16 }}>
+        Check with a sample salary
+      </h4>
+      <div className="field" style={{ maxWidth: 260 }}>
+        <label htmlFor="ps_sample">Annual CTC</label>
+        <input id="ps_sample" type="number" value={sample} onChange={(e) => setSample(e.target.value)} />
+      </div>
+      <table className="pr-breakup" style={{ marginTop: 8 }}>
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Monthly</th>
+            <th>Annual</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...preview.earnings, ...preview.employer].map(([k, x]) => (
+            <tr key={k}>
+              <td>{k}</td>
+              <td>{money0(x)}</td>
+              <td>{money0(x * 12)}</td>
+            </tr>
+          ))}
+          <tr className="total-row">
+            <td>Cost to company</td>
+            <td>{money0(preview.monthly)}</td>
+            <td>{money0(Number(sample) || 0)}</td>
+          </tr>
+        </tbody>
+      </table>
+      {balance >= 0 && preview.earnings[balance][1] === 0 && Number(sample) > 0 && <p className="pr-muted">The other components already use the whole CTC, so the balance component is zero.</p>}
+      {balance < 0 && <p className="pr-muted">No balance component: gross pay may come out below the CTC less employer costs.</p>}
+      {error && <p className="form-error">{error}</p>}
+    </Modal>
+  );
+}
+
+function PayStructures({ db }) {
+  const [editing, setEditing] = useState(null);
+  const list = db.payStructures || [];
+  const users = (st) => db.employees.filter((e) => e.status !== 'Exited' && structureOf(db, e)?.id === st.id).length;
+  const remove = (st) => {
+    if (list.length <= 1) return toast('At least one pay structure is needed.', 'error');
+    if (st.isDefault) return toast('This is the default pay structure. Make another structure the default first.', 'error');
+    const groups = (db.payGroups || []).filter((g) => g.structureId === st.id);
+    const people = db.employees.filter((e) => structureOf(db, e)?.id === st.id).length;
+    if (groups.length || people) return toast(`${st.name} is used by ${groups.length ? `${groups.length} pay group(s)` : ''}${groups.length && people ? ' and ' : ''}${people ? `${people} employee(s)` : ''}. Move them to another structure first.`, 'error');
+    if (!confirmAction(`Delete the pay structure ${st.name}?`)) return;
+    update((d) => {
+      d.payStructures = d.payStructures.filter((x) => x.id !== st.id);
+    });
+    toast('Pay structure deleted');
+  };
+  const duplicate = (st) => setEditing({ ...st, id: undefined, name: `${st.name} (copy)`, components: st.components.map((c) => ({ ...c, id: uid('c') })) });
+
+  return (
+    <Panel
+      title="Pay structures"
+      right={
+        <Btn small icon="plus" onClick={() => setEditing({ ...structureFromSettings(db.payrollSettings), id: undefined, name: '', description: '' })}>
+          Add pay structure
+        </Btn>
+      }
+    >
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        A pay structure says how a CTC is split into earning components. A pay group gives its employees a default structure, and a profile can pick a different one.
+      </p>
+      <DataTable
+        rows={list}
+        columns={[
+          { key: 'name', label: 'Structure', render: (s) => (<span>{s.name}{s.isDefault && <> <Badge tone="blue">Default</Badge></>}</span>) },
+          { key: 'components', label: 'Components', sortable: false, render: (s) => s.components.map((c) => c.name).join(', ') },
+          { key: 'pf', label: 'Employer PF', sortable: false, render: (s) => (s.employerPf === false ? 'No' : 'Yes') },
+          { key: 'grat', label: 'Gratuity', sortable: false, render: (s) => (s.gratuity === false ? 'No' : `${s.gratuityPct ?? 4.81}% of basic`) },
+          { key: 'people', label: 'Employees', sortable: false, render: users },
+          {
+            key: '_a',
+            label: '',
+            sortable: false,
+            align: 'right',
+            render: (s) => (
+              <span className="row-actions">
+                {!s.isDefault && (
+                  <Btn kind="ghost" small onClick={() => makeDefault('payStructures', s)}>
+                    Make default
+                  </Btn>
+                )}
+                <Btn kind="ghost" small onClick={() => duplicate(s)}>
+                  Duplicate
+                </Btn>
+                <Btn kind="icon" icon="edit" title="Edit" aria-label={`Edit ${s.name}`} onClick={() => setEditing({ ...s })} />
+                <Btn kind="icon" icon="trash" title="Delete" aria-label={`Delete ${s.name}`} onClick={() => remove(s)} />
+              </span>
+            ),
+          },
+        ]}
+      />
+      {editing && <StructureEditor db={db} st={editing} onClose={() => setEditing(null)} />}
+    </Panel>
+  );
+}
+
+function PayrollSettings({ db }) {
+  const [tab, setTab] = useState('cycle');
+  const [v, setV] = useState({ cycleStartDay: db.payrollSettings.cycleStartDay });
+  const save = () => {
+    update((d) => (d.payrollSettings.cycleStartDay = Math.min(28, Math.max(1, Number(v.cycleStartDay) || 1))));
+    toast('Pay cycle saved');
   };
   return (
-    <Panel title="Payroll settings" right={<Btn small onClick={save}>Save</Btn>}>
-      <FormGrid fields={PAYROLL_SETTING_FIELDS} values={v} setValues={setV} db={db} />
-      <p className="pr-muted" style={{ marginTop: 12 }}>
-        Special allowance balances the gross to CTC after employer PF and gratuity (4.81% of basic).
-      </p>
-    </Panel>
+    <div className="pr-stack">
+      <Tabs tabs={[{ key: 'cycle', label: 'Pay cycle' }, { key: 'groups', label: 'Pay groups' }, { key: 'structures', label: 'Pay structures' }]} active={tab} onChange={setTab} />
+      {tab === 'cycle' && (
+        <Panel title="Pay cycle" right={<Btn small onClick={save}>Save</Btn>}>
+          <FormGrid fields={[{ key: 'cycleStartDay', label: 'Pay cycle starts on day', type: 'number', min: 1, max: 28, help: '26 means November payroll covers 26 Oct – 25 Nov. Use 1 for calendar months. Attendance uses the same cycle, so it is also shown in Attendance settings.' }]} values={v} setValues={setV} db={db} />
+          <p className="pr-muted" style={{ marginTop: 12 }}>
+            Pay day, statutory deductions and the salary split are set per pay group and pay structure.
+          </p>
+        </Panel>
+      )}
+      {tab === 'groups' && <PayGroups db={db} />}
+      {tab === 'structures' && <PayStructures db={db} />}
+    </div>
   );
 }

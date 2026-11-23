@@ -374,6 +374,184 @@
   animation: fade-in 0.8s ease both;
 }
 
+/* Tabs: the highlight slides between tabs instead of jumping */
+.tabs {
+  position: relative;
+}
+.tab-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: var(--thumb-w, 0);
+  transform: translateX(var(--thumb-x, 0));
+  border-radius: 9px;
+  background: var(--glass-strong);
+  box-shadow: 0 1px 3px rgba(16, 32, 52, 0.12);
+  pointer-events: none;
+}
+.tabs.ready .tab-thumb {
+  transition: transform 0.5s var(--ease-spring), width 0.5s var(--ease-spring);
+}
+.tabs .tab {
+  position: relative;
+  z-index: 1;
+}
+.tabs .tab.active {
+  background: transparent;
+  box-shadow: none;
+}
+.tabs .tab.active:active {
+  transform: scale(0.96);
+}
+
+/* ---------- sidebar: sliding highlight and folding to icons ---------- */
+.side-nav {
+  position: relative;
+}
+.nav-thumb {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 0;
+  height: var(--nav-h, 0);
+  transform: translateY(var(--nav-y, 0));
+  opacity: var(--nav-o, 0);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.85), rgba(8, 145, 178, 0.75));
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.35), 0 6px 20px rgba(37, 99, 235, 0.28);
+  pointer-events: none;
+}
+.side-nav.ready .nav-thumb {
+  transition: transform 0.55s var(--ease-spring), height 0.55s var(--ease-spring), opacity 0.3s ease;
+}
+.side-nav.ready.moving .nav-thumb {
+  transition: opacity 0.3s ease;
+}
+.nav-item {
+  position: relative;
+  z-index: 1;
+}
+.nav-item.active {
+  background: transparent;
+  box-shadow: none;
+}
+.nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 170px;
+  transition: max-width 0.5s var(--ease-spring), opacity 0.25s ease;
+}
+.side-logo {
+  display: inline-flex;
+  overflow: hidden;
+  max-width: 160px;
+  transition: max-width 0.5s var(--ease-spring), opacity 0.3s ease;
+}
+.side-logo img {
+  flex: none;
+}
+.side-name {
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 80px;
+  transition: max-width 0.5s var(--ease-spring), opacity 0.25s ease;
+}
+.side-brand .side-name {
+  font-size: 14px;
+}
+.side-brand .side-mono {
+  flex: none;
+  width: 0;
+  height: 36px;
+  overflow: hidden;
+  opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #fff;
+  color: #12284c;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  transition: width 0.5s var(--ease-spring), opacity 0.35s ease;
+}
+.side-toggle {
+  display: none;
+  margin-right: 6px;
+}
+.nav-group-title {
+  overflow: hidden;
+  white-space: nowrap;
+  max-height: 40px;
+  transition: max-height 0.5s var(--ease-spring), padding 0.5s var(--ease-spring), opacity 0.25s ease;
+}
+.main {
+  transition: margin-left 0.5s var(--ease-spring);
+}
+@media (min-width: 901px) {
+  .side-toggle {
+    display: inline-flex;
+  }
+  .side {
+    transition: transform 0.5s var(--ease-spring), width 0.5s var(--ease-spring);
+  }
+  .shell.collapsed .side {
+    width: 72px;
+  }
+  .shell.collapsed .main {
+    margin-left: 72px;
+  }
+  .shell.collapsed .side-logo {
+    max-width: 0;
+    opacity: 0;
+  }
+  .shell.collapsed .side-name {
+    max-width: 0;
+    opacity: 0;
+  }
+  .shell.collapsed .side-brand .side-mono {
+    width: 40px;
+    opacity: 1;
+  }
+  .shell.collapsed .side-brand {
+    gap: 0;
+  }
+  .shell.collapsed .nav-label {
+    max-width: 0;
+    opacity: 0;
+  }
+  .shell.collapsed .nav-item {
+    gap: 0;
+    padding-left: 15px;
+  }
+  .shell.collapsed .nav-group-title {
+    max-height: 10px;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+  }
+  .shell.collapsed .nav-item .count {
+    position: absolute;
+    top: 3px;
+    left: 26px;
+    margin: 0;
+    min-width: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    text-align: center;
+    line-height: 16px;
+  }
+}
+.nav-item {
+  transition: padding 0.5s var(--ease-spring), gap 0.5s var(--ease-spring), background 0.25s ease, color 0.2s ease, transform 0.35s var(--ease-spring);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useDB, currentUser, setSession, update, getSessionId } from './store.js';
 import { Icon, Avatar, Toasts, toast, FormModal } from './ui.jsx';
 import { fullName, todayISO, minutesBetween, hm, pad } from './utils.js';
@@ -184,12 +184,22 @@ function GlobalSearch({ user }) {
 }
 
 const THEME_KEY = 'ifluids-hrms-theme';
+const SIDE_KEY = 'ifluids-hrms-side';
 
 function Shell({ user, route }) {
   const db = useDB();
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(null);
   const [pw, setPw] = useState(false);
+  // The sidebar can fold down to icons (the choice is remembered). Ctrl/Cmd + B toggles it.
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDE_KEY) === 'collapsed');
+  const toggleSide = () =>
+    setCollapsed((c) => {
+      localStorage.setItem(SIDE_KEY, c ? 'open' : 'collapsed');
+      return !c;
+    });
+  const navRef = useRef(null);
+  const [navReady, setNavReady] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'light');
   const switchTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -249,23 +259,70 @@ function Shell({ user, route }) {
       page = <Home user={user} />;
   }
 
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b' || e.altKey || e.shiftKey) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      toggleSide();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // The highlight in the sidebar slides to the page you open instead of jumping. While the sidebar folds
+  // the items shift a little, so the highlight follows them frame by frame.
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return undefined;
+    const place = () => {
+      const a = nav.querySelector('.nav-item.active');
+      nav.style.setProperty('--nav-o', a ? '1' : '0');
+      if (!a) return;
+      nav.style.setProperty('--nav-y', `${a.offsetTop}px`);
+      nav.style.setProperty('--nav-h', `${a.offsetHeight}px`);
+    };
+    place();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null;
+    if (ro) nav.querySelectorAll('.nav-group').forEach((g) => ro.observe(g));
+    return () => ro && ro.disconnect();
+  }, [path, collapsed, user.role]);
+  const folded = useRef(collapsed);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav || folded.current === collapsed) return undefined;
+    folded.current = collapsed;
+    nav.classList.add('moving'); // while the sidebar folds, the highlight just follows the items
+    const t = setTimeout(() => nav.classList.remove('moving'), 620);
+    return () => clearTimeout(t);
+  }, [collapsed]);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setNavReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const isActive = (to) => path === to || path.startsWith(to + '/') || (to === 'finances/summary' && section === 'finances');
 
   return (
-    <div className={`shell theme-${theme}`}>
+    <div className={`shell theme-${theme} ${collapsed ? 'collapsed' : ''}`}>
       <aside className={`side ${open ? 'open' : ''}`}>
         <div className="side-brand">
-          <img src={logo} alt="iFluids Engineering" />
-          <span>HRMS</span>
+          <span className="side-logo">
+            <img src={logo} alt="iFluids Engineering" />
+          </span>
+          <span className="side-mono" aria-hidden="true">iF</span>
+          <span className="side-name">HRMS</span>
         </div>
-        <nav className="side-nav">
+        <nav className={`side-nav ${navReady ? 'ready' : ''}`} ref={navRef}>
+          <span className="nav-thumb" aria-hidden="true" />
           {groups.map((g, i) => (
             <div key={i} className="nav-group">
               {g.title && <div className="nav-group-title">{g.title}</div>}
               {g.items.map((it) => (
-                <a key={it.to} href={`#/${it.to}`} className={`nav-item ${isActive(it.to) ? 'active' : ''}`}>
+                <a key={it.to} href={`#/${it.to}`} className={`nav-item ${isActive(it.to) ? 'active' : ''}`} title={collapsed ? it.label : undefined} aria-label={it.label}>
                   <Icon name={it.icon} size={17} />
-                  {it.label}
+                  <span className="nav-label">{it.label}</span>
                   {it.count && pending > 0 && <span className="count">{pending}</span>}
                 </a>
               ))}
@@ -278,6 +335,9 @@ function Shell({ user, route }) {
         <header className="topbar">
           <button className="icon-btn menu-btn" onClick={() => setOpen(true)} aria-label="Open menu">
             <Icon name="menu" />
+          </button>
+          <button className="icon-btn side-toggle" onClick={toggleSide} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={collapsed} title={`${collapsed ? 'Expand' : 'Collapse'} sidebar (Ctrl+B)`}>
+            <Icon name="sidebar" />
           </button>
           <span className="topbar-company hide-md">{db.company.name}</span>
           <GlobalSearch user={user} />
