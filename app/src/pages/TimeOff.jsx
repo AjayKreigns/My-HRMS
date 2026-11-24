@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDB, addItem, patchItem, notify, update, uid } from '../store.js';
-import { Card, Btn, Badge, Tabs, DataTable, FormModal, PageHead, Stat, KV, toast, DateRange, confirmAction, exportCSV } from '../ui.jsx';
+import { Card, Btn, Badge, Tabs, DataTable, FormModal, PageHead, Stat, KV, toast, DateRange, confirmAction, exportCSV, followDate } from '../ui.jsx';
 import { useClock, ClockLabel } from '../App.jsx';
 import {
   todayISO, addMonths, monthLabel, attendanceFor, arrival, minutesBetween, hm, fmtTime, fmtDate, parseISO, DAYS,
@@ -298,6 +298,7 @@ export function Attendance({ user, admin, onBack }) {
         <FormModal
           title={byAdmin ? `Attendance for ${fullName(user)}` : 'Attendance request'}
           fields={ATT_REQUEST_FIELDS}
+          adjust={followDate('date', 'to')}
           initial={req}
           onClose={() => setReq(null)}
           onSave={submitReq}
@@ -614,6 +615,7 @@ export function ApplyLeave({ emp, onClose, byAdmin, partial, fromLog }) {
     <FormModal
       title={byAdmin ? `Add leave for ${fullName(emp)}` : fromLog ? `Apply leave for ${fmtDate(day)}` : partial ? 'Partial leave' : 'Apply leave'}
       fields={leaveFields(db, emp, byAdmin)}
+      adjust={followDate('from', 'to')}
       initial={{ from: day || todayISO(), to: day || todayISO(), ...(partial ? { mode: PARTIAL, typeId: db.leaveTypes.find((t) => isHours(t) && rulesOf(t).active !== false)?.id || '' } : {}) }}
       submitLabel={byAdmin ? 'Add leave' : 'Apply'}
       validate={(v) => {

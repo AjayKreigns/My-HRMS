@@ -565,9 +565,21 @@ export function FormGrid({ fields, values, setValues, db }) {
   return <div className="form-grid">{out}</div>;
 }
 
-export function FormModal({ title, fields, initial = {}, onSave, onClose, submitLabel = 'Save', wide, validate, children, after }) {
+// For a "From" and "To" date pair: when the From date changes and the To date was still the same day
+// (a one-day request) or is now before it, the To date follows. Without this, picking an earlier From date
+// leaves To on today and quietly turns a one-day request into a long one.
+export const followDate = (fromKey, toKey) => (next, prev) =>
+  next[fromKey] !== prev[fromKey] && (!next[toKey] || prev[toKey] === prev[fromKey] || next[toKey] < next[fromKey]) ? { ...next, [toKey]: next[fromKey] } : next;
+
+export function FormModal({ title, fields, initial = {}, onSave, onClose, submitLabel = 'Save', wide, validate, children, after, adjust }) {
   const db = useDB();
-  const [values, setValues] = useState(() => ({ ...Object.fromEntries(fields.filter((f) => f.default !== undefined).map((f) => [f.key, f.default])), ...initial }));
+  const [values, setRaw] = useState(() => ({ ...Object.fromEntries(fields.filter((f) => f.default !== undefined).map((f) => [f.key, f.default])), ...initial }));
+  // `adjust(next, prev)` may change other values when one changes (see followDate)
+  const setValues = (fn) =>
+    setRaw((prev) => {
+      const next = typeof fn === 'function' ? fn(prev) : fn;
+      return adjust ? adjust(next, prev) : next;
+    });
   const [error, setError] = useState('');
   const submit = (e) => {
     e.preventDefault();
