@@ -8,7 +8,7 @@ import { decide } from './Inbox.jsx';
 import {
   empById, cycleLabel, fullName, fmtDate, fmtTime, money, monthLabel, todayISO, attendanceFor, minutesBetween, hm, activeEmployees, arrival, addDays, parseISO, cycleStartOf, scheduleOfShift, cycleMonthOf, cycleRange,
 } from '../utils.js';
-import { leaveBalances, countRange, describeRules, rulesOf, creditMode, RULE_DEFAULTS, attendanceRemark, isHours } from '../leave.js';
+import { leaveBalances, countRange, describeRules, rulesOf, creditMode, RULE_DEFAULTS, attendanceRemark, isHours, backdateRule } from '../leave.js';
 
 // ---------- leave types: editor, rule tester, delete ----------
 const ord = (n) => `${n}${[, 'st', 'nd', 'rd'][(n % 100 >> 3) ^ 1 && n % 10] || 'th'}`;
@@ -32,6 +32,9 @@ function sandwichSummary(t) {
   if (!r.sw_enabled) return 'Off';
   return `More than ${r.sw_minDays} ${r.sw_basis === 'Calendar days' ? 'calendar' : 'working'} days${r.sw_holidayBlock === 'Skip the block' ? ' · skips holiday block' : ''}`;
 }
+
+// The "apply within" choice of a leave type as the editor shows it.
+const basisOf = (v) => ({ days: 'Days', cycle: 'Cycle', none: 'None' })[backdateRule(v).mode];
 
 const TYPE_FIELDS = [
   { key: 'name', label: 'Name', required: true, section: 'Basics' },
@@ -64,8 +67,9 @@ const TYPE_FIELDS = [
   { key: 'needsApproval', label: "Needs the reporting manager's approval", type: 'checkbox', section: 'Applying', full: true },
   { key: 'allowPartial', label: 'Allow partial-day (From and To time) leave', type: 'checkbox', full: true },
   { key: 'insufficientAction', label: 'When the balance is not enough', type: 'select', options: [{ value: 'Block', label: 'Do not accept the request' }, { value: 'Convert excess to LOP', label: 'Count the extra days as Loss of Pay' }], show: (v) => !v.unlimited },
-  { key: 'backdateDays', label: 'Apply within (days after the leave)', type: 'number', min: 0, help: 'Leave blank for no limit.', show: (v) => !v.unlimited },
-  { key: 'backdateAction', label: 'If applied later than that', type: 'select', options: [{ value: 'Convert to LOP', label: 'Count the leave as Loss of Pay' }, { value: 'Block', label: 'Do not accept the request' }], show: (v) => !v.unlimited && v.backdateDays !== '' && v.backdateDays !== undefined },
+  { key: 'backdateBasis', label: 'Time allowed to apply for leave', type: 'select', options: [{ value: 'None', label: 'No limit: leave can be applied any time' }, { value: 'Days', label: 'A number of days after the leave' }, { value: 'Cycle', label: 'Until the end of the attendance cycle' }], help: 'The cycle option follows the attendance cycle set in Attendance settings (for example the 26th to the 25th), whatever the length of the month.', show: (v) => !v.unlimited },
+  { key: 'backdateDays', label: 'Apply within (days after the leave)', type: 'number', min: 0, show: (v) => !v.unlimited && basisOf(v) === 'Days' },
+  { key: 'backdateAction', label: 'If applied later than that', type: 'select', options: [{ value: 'Convert to LOP', label: 'Count the leave as Loss of Pay' }, { value: 'Block', label: 'Do not accept the request' }], help: 'Used only when a time limit is set above.', show: (v) => !v.unlimited && basisOf(v) !== 'None' },
   { key: 'cutoffTime', label: 'Same-day leave must be informed by', type: 'time', help: 'Leave blank for no rule.', show: (v) => !v.unlimited },
   { key: 'lateInformLop', label: 'If informed later, days counted as LOP', type: 'number', step: 0.5, show: (v) => !v.unlimited && !!v.cutoffTime },
   { key: 'certificateAfterDays', label: 'Medical certificate needed beyond (days)', type: 'number', min: 0, help: 'Leave blank if never needed.' },
@@ -137,7 +141,7 @@ function RuleTester({ db, rule }) {
   );
 }
 
-const NEW_TYPE = { ...RULE_DEFAULTS, unit: 'Days', accrual: 'Monthly', annualQuota: 12, carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'All', color: '#5746af', unlimited: false, description: '' };
+const NEW_TYPE = { ...RULE_DEFAULTS, backdateBasis: 'None', unit: 'Days', accrual: 'Monthly', annualQuota: 12, carryForward: 'No', maxCarryForward: 0, encashable: 'No', paid: 'Paid', gender: 'All', color: '#5746af', unlimited: false, description: '' };
 
 function LeaveTypes() {
   const db = useDB();
@@ -171,6 +175,7 @@ function LeaveTypes() {
     ['annualQuota', 'maxCarryForward', 'creditDay', 'leaveYearStart', 'joinCutoffDay', 'sw_minDays', 'lateInformLop', 'timesPerCycle', 'maxHoursEach', 'maxHoursPerCycle'].forEach((k) => {
       if (data[k] !== '' && data[k] !== undefined) data[k] = Number(data[k]);
     });
+    if (data.backdateBasis !== 'Days') data.backdateDays = '';
     if (data.unlimited) data.accrual = 'None';
     if (data.unit === 'Hours') {
       data.unlimited = false;
@@ -210,7 +215,7 @@ function LeaveTypes() {
             align: 'right',
             render: (t) => (
               <span className="row-actions">
-                <Btn kind="icon" icon="edit" title="Edit rules" aria-label={`Edit ${t.name}`} onClick={() => setEditing({ ...RULE_DEFAULTS, ...t })} />
+                <Btn kind="icon" icon="edit" title="Edit rules" aria-label={`Edit ${t.name}`} onClick={() => setEditing({ ...RULE_DEFAULTS, ...t, backdateBasis: basisOf({ ...RULE_DEFAULTS, ...t }) })} />
                 <Btn kind="icon" icon="trash" title="Delete" aria-label={`Delete ${t.name}`} onClick={() => remove(t)} />
               </span>
             ),

@@ -17,7 +17,8 @@ export const RULE_DEFAULTS = {
   // applying
   needsApproval: true,
   allowPartial: true,
-  backdateDays: '', // latest an application may be made after the leave ended ('' = no limit)
+  backdateBasis: '', // 'Days' | 'Cycle' | 'None'; '' = work it out from backdateDays (older saved types)
+  backdateDays: '', // with basis 'Days': latest an application may be made after the leave ended
   backdateAction: 'Convert to LOP', // or 'Block'
   cutoffTime: '', // same-day leave must be informed by this time ('' = no rule)
   lateInformLop: 0.5, // days of the leave turned into LOP when informed after the cut-off
@@ -38,6 +39,18 @@ export const RULE_DEFAULTS = {
   sw_merge: true, // treat separate requests joined only by weekly offs / holidays as one
 };
 export const rulesOf = (t) => ({ ...RULE_DEFAULTS, ...(t || {}) });
+
+// How late an application may be made, as set on the leave type:
+//   days  -> within N days after the last day of the leave
+//   cycle -> until the end of the attendance cycle that last day falls in (26 Oct - 25 Nov, however long the month)
+//   none  -> no limit
+export function backdateRule(r) {
+  const days = r.backdateDays === '' || r.backdateDays == null || Number.isNaN(Number(r.backdateDays)) ? null : Number(r.backdateDays);
+  const basis = r.backdateBasis || (days !== null ? 'Days' : 'None');
+  if (basis === 'Cycle') return { mode: 'cycle', days: null };
+  if (basis === 'Days' && days !== null) return { mode: 'days', days };
+  return { mode: 'none', days: null };
+}
 
 const num = (x) => (x === '' || x === undefined || x === null || Number.isNaN(Number(x)) ? null : Number(x));
 const on = (x) => x === true || x === 'true' || x === 'Yes';
@@ -433,11 +446,20 @@ export function evaluateLeave(db, emp, v, opts = {}) {
       notes.push(`${t.name} cannot be taken next to ${nm}, so these days are counted as Loss of Pay.`);
     }
   }
-  const bd = num(r.backdateDays);
-  if (convertible && bd !== null && to < today && daysBetween(to, today) > bd) {
-    if (r.backdateAction === 'Block') return fail(`${t.name} must be applied within ${bd} day(s) of the leave.`);
-    lopDays = days;
-    notes.push(`Applied more than ${bd} day(s) after the leave, so these days are counted as Loss of Pay.`);
+  const bd = backdateRule(r);
+  if (convertible && bd.mode !== 'none' && to < today) {
+    const sd = cycleStartOf(db);
+    const ym = cycleMonthOf(to, sd);
+    const cycleEnd = cycleRange(ym, sd)[1];
+    if (bd.mode === 'days' && daysBetween(to, today) > bd.days) {
+      if (r.backdateAction === 'Block') return fail(`${t.name} must be applied within ${bd.days} day(s) of the leave.`);
+      lopDays = days;
+      notes.push(`Applied more than ${bd.days} day(s) after the leave, so these days are counted as Loss of Pay.`);
+    } else if (bd.mode === 'cycle' && today > cycleEnd) {
+      if (r.backdateAction === 'Block') return fail(`${t.name} must be applied before the attendance cycle ends (${cycleLabel(ym, sd)}). That cycle has closed.`);
+      lopDays = days;
+      notes.push(`Applied after the attendance cycle (${cycleLabel(ym, sd)}) closed, so these days are counted as Loss of Pay.`);
+    }
   }
   if (convertible && r.cutoffTime && !v.partial && v.from === today && time > r.cutoffTime && num(r.lateInformLop)) {
     const late = Math.min(days, Number(r.lateInformLop));
@@ -533,7 +555,8 @@ export function describeRules(t, db) {
     out.push(r.insufficientAction === 'Convert excess to LOP' ? 'Beyond the limit, the request is counted as Loss of Pay.' : 'Beyond the limit, the request is not accepted.');
     out.push(on(r.needsApproval) ? "Needs the reporting manager's approval." : 'Approved automatically.');
     out.push('It does not use the day balance of any other leave. The hours taken lower the hours the day needs.');
-    if (num(r.backdateDays) !== null) out.push(`Apply within ${num(r.backdateDays)} day(s) after the leave; later is ${r.backdateAction === 'Block' ? 'not accepted' : 'counted as Loss of Pay'}.`);
+    const bdh = backdateRule(r);
+    if (bdh.mode !== 'none') out.push(`${bdh.mode === 'cycle' ? 'Apply until the end of the attendance cycle the leave falls in' : `Apply within ${bdh.days} day(s) after the leave`}; later is ${r.backdateAction === 'Block' ? 'not accepted' : 'counted as Loss of Pay'}.`);
     return out;
   }
   const when = Number(r.creditDay) === 0 ? 'on the last day of the month' : `on the ${ord(Number(r.creditDay))} of the month`;
@@ -559,7 +582,8 @@ export function describeRules(t, db) {
       `Sandwich: ${kinds} ${r.sw_scope === 'Between leave days only' ? 'between leave days' : 'inside the request'} count as leave when the leave is more than ${num(r.sw_minDays) ?? 0} ${basis}${r.sw_holidayBlock === 'Skip the block' ? '; a block that includes a holiday is not counted' : ''}${on(r.sw_edges) ? '; also those directly before or after' : ''}${on(r.sw_merge) ? '. Separate requests joined only by weekly offs or holidays are counted together' : ''}.`,
     );
   } else out.push('Weekly offs and holidays are never counted.');
-  if (num(r.backdateDays) !== null) out.push(`Apply within ${num(r.backdateDays)} day(s) after the leave; later is ${r.backdateAction === 'Block' ? 'not accepted' : 'counted as Loss of Pay'}.`);
+  const bdr = backdateRule(r);
+  if (bdr.mode !== 'none') out.push(`${bdr.mode === 'cycle' ? 'Apply until the end of the attendance cycle the leave falls in (whatever the length of the month)' : `Apply within ${bdr.days} day(s) after the leave`}; later is ${r.backdateAction === 'Block' ? 'not accepted' : 'counted as Loss of Pay'}.`);
   if (r.cutoffTime) out.push(`Same-day leave must be informed by ${r.cutoffTime}; later, ${num(r.lateInformLop) ?? 0} day is counted as Loss of Pay.`);
   if (num(r.certificateAfterDays) !== null) out.push(`Medical certificate needed beyond ${num(r.certificateAfterDays)} day(s)${on(r.certificateEnforce) ? ' (required to submit)' : ''}.`);
   if ((r.noCombineWith || []).length) out.push(`Cannot be taken next to ${r.noCombineWith.map(nameOf).join(', ')}; ${r.combineAction === 'Block' ? 'the request is not accepted' : 'the days are counted as Loss of Pay'}.`);
