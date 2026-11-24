@@ -4,7 +4,7 @@
 :root {
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --glass: rgba(255, 255, 255, 0.62);
+  --glass: rgba(255, 255, 255, 0.74);
   --glass-strong: rgba(255, 255, 255, 0.82);
   --glass-line: rgba(255, 255, 255, 0.75);
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -13,7 +13,7 @@
   --blur: blur(22px) saturate(180%);
 }
 .theme-dark {
-  --glass: rgba(18, 32, 48, 0.55);
+  --glass: rgba(18, 32, 48, 0.68);
   --glass-strong: rgba(18, 32, 48, 0.82);
   --glass-line: rgba(255, 255, 255, 0.08);
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -74,8 +74,6 @@
 .kan-col,
 .pr-modules {
   background: var(--glass);
-  -webkit-backdrop-filter: var(--blur);
-  backdrop-filter: var(--blur);
   border: 1px solid var(--glass-line);
   box-shadow: var(--glass-edge), var(--glass-shadow);
 }
@@ -260,13 +258,11 @@
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.985);
-    filter: blur(6px);
+    transform: translate3d(0, 12px, 0) scale(0.99);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
 @keyframes fade-in {
@@ -306,8 +302,8 @@
 }
 
 /* Each page settles in; its cards follow one after another. */
-.page-enter > * {
-  animation: rise-in 0.6s var(--ease-spring) both;
+.page-enter > :not(:is(.grid, .stack, .pr-stack, .pr-cards4, .pr-cards2, .pr-steps, .pr-reports)) {
+  animation: rise-in 0.5s var(--ease-spring) both;
 }
 .page-enter > *:nth-child(2) {
   animation-delay: 0.05s;
@@ -325,7 +321,7 @@
 .page-enter .pr-cards2 > *,
 .page-enter .pr-steps > *,
 .page-enter .pr-reports > * {
-  animation: rise-in 0.65s var(--ease-spring) both;
+  animation: rise-in 0.5s var(--ease-spring) both;
 }
 .page-enter :is(.grid, .stack, .pr-stack, .pr-cards4, .pr-cards2, .pr-steps, .pr-reports) > :nth-child(2) {
   animation-delay: 0.06s;
@@ -550,6 +546,36 @@
 }
 .nav-item {
   transition: padding 0.5s var(--ease-spring), gap 0.5s var(--ease-spring), background 0.25s ease, color 0.2s ease, transform 0.35s var(--ease-spring);
+}
+
+/* Link tabs (My Finances, Payroll): the highlight slides like the Tabs highlight */
+.slide-nav {
+  position: relative;
+}
+.slide-nav a {
+  position: relative;
+  z-index: 1;
+}
+.slide-nav.ready .tab-thumb {
+  transition: transform 0.5s var(--ease-spring), width 0.5s var(--ease-spring);
+}
+.subnav.slide-nav a.active,
+.pr-subs.slide-nav a.active {
+  background: transparent;
+  box-shadow: none;
+}
+.pr-modules.slide-nav a.active::after {
+  display: none;
+}
+.pr-modules.slide-nav .tab-thumb {
+  top: auto;
+  bottom: -1px;
+  height: 3px;
+  width: calc(var(--thumb-w, 0px) - 28px);
+  transform: translateX(calc(var(--thumb-x, 0px) + 14px));
+  border-radius: 3px 3px 0 0;
+  background: var(--brand);
+  box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

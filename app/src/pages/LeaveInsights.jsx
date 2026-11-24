@@ -1,10 +1,10 @@
 // The employee's leave overview: a balance wheel, a month-by-month rhythm chart, one capsule per
 // leave type, a year-at-a-glance heat map, the weekdays leave falls on and what is coming up.
 // Everything is drawn from the employee's own leave requests and balances; nothing is stored.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Icon } from '../ui.jsx';
 import { addDays, parseISO, todayISO, fmtDate, hm, minutesBetween, isHoliday, isWeeklyOff, leavePart, cycleLabel, cycleStartOf, empById } from '../utils.js';
-import { isHours } from '../leave.js';
+import { leaveBalances } from '../leave.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -15,48 +15,50 @@ const shortDate = (d) => parseISO(d).toLocaleDateString('en-GB', { day: 'numeric
 const weekdayOf = (d) => (parseISO(d).getDay() + 6) % 7; // 0 = Monday
 
 // ---------- motion helpers ----------
-// True one moment after the first paint, so bars and rings can grow from nothing.
-function useReady() {
-  const [ready, setReady] = useState(reduced());
+// Everything animates from a CSS class that is added once, a moment after the page has settled in: no
+// React state changes while the page is moving, so the entrance stays smooth. The numbers count up by
+// writing the text straight into the element, not through React.
+function useReadyClass(ref) {
   useEffect(() => {
-    if (ready) return undefined;
-    const t = setTimeout(() => setReady(true), 60);
-    return () => clearTimeout(t);
-  }, [ready]);
-  return ready;
-}
-// A number that counts up to its value, and from its current value to a new one (quicker).
-function useCountUp(target, ms = 1000) {
-  const [v, setV] = useState(reduced() ? target : 0);
-  const cur = useRef(reduced() ? target : 0);
-  const first = useRef(true);
-  useEffect(() => {
-    if (reduced() || !Number.isFinite(target)) {
-      cur.current = target;
-      setV(target);
+    const el = ref.current;
+    if (!el) return undefined;
+    if (reduced()) {
+      el.classList.add('lv-ready');
       return undefined;
     }
-    const from = cur.current;
-    const dur = first.current ? ms : 350;
-    first.current = false;
+    const t = setTimeout(() => el.classList.add('lv-ready'), 140);
+    return () => clearTimeout(t);
+  }, [ref]);
+}
+const fmtCount = (v, target) => (Number.isFinite(target) ? (Number.isInteger(target) ? String(Math.round(v)) : r1(v).toFixed(1)) : '∞');
+function Count({ value, className, style }) {
+  const el = useRef(null);
+  const cur = useRef(null);
+  useLayoutEffect(() => {
+    const node = el.current;
+    if (!node) return undefined;
+    if (reduced() || !Number.isFinite(value)) {
+      cur.current = value;
+      node.textContent = fmtCount(value, value);
+      return undefined;
+    }
+    const first = cur.current === null;
+    const from = first ? 0 : cur.current;
+    const dur = first ? 1000 : 350;
+    if (first) node.textContent = fmtCount(0, value);
     let raf;
     let t0;
     const step = (t) => {
-      if (t0 === undefined) t0 = t;
-      const p = Math.min(1, (t - t0) / dur);
-      cur.current = from + (target - from) * (1 - (1 - p) ** 3);
-      setV(cur.current);
+      if (t0 === undefined) t0 = t + (first ? 220 : 0); // the first count waits for the page to settle
+      const p = Math.max(0, Math.min(1, (t - t0) / dur));
+      cur.current = from + (value - from) * (1 - (1 - p) ** 3);
+      node.textContent = fmtCount(cur.current, value);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [target, ms]);
-  return v;
-}
-function Count({ value, className, style }) {
-  const v = useCountUp(value);
-  if (!Number.isFinite(value)) return <span className={className} style={style}>∞</span>;
-  return <span className={className} style={style}>{Number.isInteger(value) ? Math.round(v) : r1(v).toFixed(1)}</span>;
+  }, [value]);
+  return <span ref={el} className={className} style={style} />;
 }
 
 // ---------- data ----------
@@ -83,7 +85,6 @@ function leaveDays(db, empId, year) {
 
 // ---------- 1. balance wheel ----------
 function Wheel({ items }) {
-  const ready = useReady();
   const [focus, setFocus] = useState(null);
   const total = items.reduce((s, b) => s + Math.max(0, b.available), 0);
   const f = items.find((b) => b.type.id === focus);
@@ -113,9 +114,10 @@ function Wheel({ items }) {
               <g key={b.type.id} className={`lv-ring ${dim ? 'dim' : ''}`} tabIndex={0} onMouseEnter={() => setFocus(b.type.id)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(b.type.id)} onBlur={() => setFocus(null)} aria-label={`${b.type.name}: ${r1(b.available)} of ${r1(b.quota)} days left`}>
                 <circle cx={mid} cy={mid} r={r} fill="none" stroke={b.type.color} strokeOpacity="0.14" strokeWidth={stroke} />
                 {used > 0 && (
-                  <circle cx={mid} cy={mid} r={r} fill="none" stroke={b.type.color} strokeOpacity="0.3" strokeWidth={stroke} strokeDasharray={`2 ${(C * 0.012).toFixed(1)}`} transform={`rotate(${-90 + share * 360} ${mid} ${mid})`} style={{ strokeDasharray: `${ready ? C * used : 0} ${C}`, transition: `stroke-dasharray 1.1s cubic-bezier(.22,1,.36,1) ${i * 110 + 250}ms` }} />
+                  <circle className="lv-arc" cx={mid} cy={mid} r={r} fill="none" stroke={b.type.color} strokeOpacity="0.3" strokeWidth={stroke} transform={`rotate(${-90 + share * 360} ${mid} ${mid})`} style={{ '--len': C * used, '--circ': C, transitionDelay: `${i * 110 + 250}ms` }} />
                 )}
                 <circle
+                  className="lv-arc"
                   cx={mid}
                   cy={mid}
                   r={r}
@@ -124,7 +126,7 @@ function Wheel({ items }) {
                   strokeWidth={stroke}
                   strokeLinecap="round"
                   transform={`rotate(-90 ${mid} ${mid})`}
-                  style={{ strokeDasharray: `${ready ? Math.max(share * C - (share > 0 && share < 1 ? 1 : 0), 0) : 0} ${C}`, transition: `stroke-dasharray 1.1s cubic-bezier(.22,1,.36,1) ${i * 110}ms`, opacity: share > 0 ? 1 : 0 }}
+                  style={{ '--len': Math.max(share * C - (share > 0 && share < 1 ? 1 : 0), 0), '--circ': C, transitionDelay: `${i * 110}ms`, opacity: share > 0 ? 1 : 0 }}
                 />
               </g>
             );
@@ -155,7 +157,6 @@ function Wheel({ items }) {
 
 // ---------- 2. monthly rhythm ----------
 function Rhythm({ days, types, year }) {
-  const ready = useReady();
   const [hover, setHover] = useState(null);
   const now = new Date();
   const thisMonth = now.getFullYear() === year ? now.getMonth() : -1;
@@ -200,7 +201,7 @@ function Rhythm({ days, types, year }) {
               {Object.entries(o).map(([k, v], j) => {
                 const t = types.find((x) => x.id === k.replace(':p', ''));
                 const pend = k.endsWith(':p');
-                return <span key={k} className={`lv-seg ${pend ? 'pend' : ''}`} style={{ height: ready ? `${(v / max) * 100}%` : '0%', background: t?.color || '#64748b', transitionDelay: `${i * 45 + j * 60}ms` }} />;
+                return <span key={k} className={`lv-seg ${pend ? 'pend' : ''}`} style={{ '--h': `${(v / max) * 100}%`, background: t?.color || '#64748b', transitionDelay: `${i * 45 + j * 60}ms` }} />;
               })}
             </div>
             <label>{MONTHS[i]}</label>
@@ -221,7 +222,6 @@ function Rhythm({ days, types, year }) {
 
 // ---------- 3. one capsule per leave type ----------
 function Capsule({ b, i, sd }) {
-  const ready = useReady();
   const t = b.type;
   const unlimited = t.unlimited;
   const hours = b.unit === 'Hours';
@@ -257,7 +257,7 @@ function Capsule({ b, i, sd }) {
       ) : (
         <div className={`lv-pips ${hours ? 'hours' : ''}`} role="img" aria-label={`${availSeg} of ${n} left`}>
           {Array.from({ length: n }, (_, k) => (
-            <span key={k} className={kind(k)} style={{ transitionDelay: `${i * 70 + k * 28}ms`, transform: ready ? 'scaleY(1)' : 'scaleY(0.15)', opacity: ready ? 1 : 0 }} />
+            <span key={k} className={kind(k)} style={{ transitionDelay: `${i * 70 + k * 28}ms` }} />
           ))}
         </div>
       )}
@@ -340,7 +340,7 @@ function YearMap({ db, emp, days, types, year }) {
               ))}
             </div>
             <div className="lv-year-grid" style={{ '--cols': cols }}>
-              {cells.map((c, idx) => (c.blank ? <i key={c.key} className="blank" /> : <i key={c.key} className={c.cls} style={{ ...c.style, animationDelay: `${Math.min(900, c.col * 14 + (idx % 7) * 6)}ms` }} title={c.label} />))}
+              {cells.map((c, idx) => (c.blank ? <i key={c.key} className="blank" /> : <i key={c.key} className={c.cls} style={c.style} title={c.label} />))}
             </div>
           </div>
         </div>
@@ -361,7 +361,6 @@ function YearMap({ db, emp, days, types, year }) {
 
 // ---------- 5. which weekdays ----------
 function WeekdayBubbles({ days }) {
-  const ready = useReady();
   const counts = WEEKDAYS.map(() => 0);
   days.filter((d) => !d.pending).forEach((d) => {
     counts[weekdayOf(d.date)] += d.part;
@@ -376,7 +375,7 @@ function WeekdayBubbles({ days }) {
           return (
             <div key={WEEKDAYS[i]} className={`lv-bubble-col ${c === max && max > 0 ? 'top' : ''}`}>
               <div className="lv-bubble-slot">
-                <span className="lv-bubble" style={{ width: size, height: size, transform: ready ? 'scale(1)' : 'scale(0)', transitionDelay: `${i * 70}ms` }} title={`${WEEKDAYS[i]}: ${r1(c)} day(s)`}>
+                <span className="lv-bubble" style={{ width: size, height: size, transitionDelay: `${i * 70}ms` }} title={`${WEEKDAYS[i]}: ${r1(c)} day(s)`}>
                   {c > 0 ? r1(c) : ''}
                 </span>
               </div>
@@ -427,14 +426,30 @@ function ComingUp({ db, emp, bal }) {
   );
 }
 
+// Draws its content a moment after the page has settled in, so a heavy block below the fold does not
+// hold up the entrance animation.
+function Deferred({ children, delay = 260, minHeight }) {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setOn(true), delay);
+    return () => clearTimeout(t);
+  }, [delay]);
+  return on ? children : <div style={{ minHeight }} />;
+}
+
 // ---------- the whole section ----------
-export default function LeaveInsights({ db, user, bal, tiles, year }) {
+function LeaveInsights({ db, user, year }) {
   const days = useMemo(() => leaveDays(db, user.id, year), [db, user.id, year]);
+  const bal = useMemo(() => leaveBalances(db, user.id), [db, user.id]);
+  // HR-added balances (comp off, maternity...) show only once there is something to show.
+  const tiles = useMemo(() => bal.filter((b) => !b.manual || b.quota > 0 || b.taken > 0 || b.pending > 0), [bal]);
   const dayTypes = db.leaveTypes;
   const wheel = bal.filter((b) => !b.type.unlimited && b.unit !== 'Hours' && b.quota > 0);
   const sd = cycleStartOf(db);
+  const root = useRef(null);
+  useReadyClass(root);
   return (
-    <div className="lv">
+    <div className="lv" ref={root}>
       <div className="lv-row lv-row-a">
         <section className="lv-card lv-rise" style={{ '--i': 0 }}>
           <h3>Leave balance</h3>
@@ -458,7 +473,9 @@ export default function LeaveInsights({ db, user, bal, tiles, year }) {
         <section className="lv-card lv-rise" style={{ '--i': 2 }}>
           <h3>{year} at a glance</h3>
           <p className="muted lv-sub">Every day of the year: where you worked, took leave, and what is still ahead.</p>
-          <YearMap db={db} emp={user} days={days} types={dayTypes} year={year} />
+          <Deferred minHeight={210}>
+            <YearMap db={db} emp={user} days={days} types={dayTypes} year={year} />
+          </Deferred>
         </section>
         <div className="lv-stack">
           <section className="lv-card lv-rise" style={{ '--i': 3 }}>
@@ -474,3 +491,6 @@ export default function LeaveInsights({ db, user, bal, tiles, year }) {
     </div>
   );
 }
+
+// Drawn again only when the leave data changes, not each time a tab on the page is switched.
+export default memo(LeaveInsights);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useDB, addItem, update, uid, notify } from '../store.js';
-import { Card, Btn, Badge, DataTable, FormModal, PageHead, KV, Stat, Modal, Empty, toast } from '../ui.jsx';
+import { Card, Btn, Badge, DataTable, FormModal, PageHead, KV, Stat, Modal, Empty, NavTabs, toast } from '../ui.jsx';
 import { go } from '../App.jsx';
 import { money, monthLabel, payslipFor, breakupFor, settingsFor, payGroupOf, incomeTax, declarationTotal, fullName, fmtDate, todayISO, ymOf, addMonths, empById } from '../utils.js';
 
@@ -119,11 +119,7 @@ export default function Finances({ user, tab }) {
   return (
     <div>
       <PageHead title="My Finances" sub={`Financial year ${fy}`} />
-      <div className="subnav">
-        {TABS.map(([k, l]) => (
-          <a key={k} href={`#/finances/${k}`} className={tab === k ? 'active' : ''}>{l}</a>
-        ))}
-      </div>
+      <NavTabs className="subnav" items={TABS.map(([k, l]) => ({ key: k, label: l, href: `#/finances/${k}` }))} active={tab} label="My Finances" />
 
       {tab === 'summary' && (
         <div className="stack">

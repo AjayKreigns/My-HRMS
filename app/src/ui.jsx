@@ -138,19 +138,14 @@ export function PageHead({ title, sub, children }) {
 // sit in), so every screen that uses Tabs gets the motion without changing. Only opacity and transform
 // are animated, for 320 ms, so it stays smooth and never delays the page.
 const SWAP_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
-export function Tabs({ tabs, active, onChange }) {
-  const root = useRef(null);
-  const before = useRef(null);
-  const [ready, setReady] = useState(false);
-  const keys = tabs.map((t) => (typeof t === 'string' ? t : t.key));
-  const signature = tabs.map((t) => (typeof t === 'string' ? t : `${t.key}:${t.label}`)).join('|');
 
-  // the sliding highlight follows the active tab, also when the tabs change size
+// The sliding highlight follows the active tab, also when the tabs change size.
+function useThumb(root, active, signature) {
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return undefined;
     const place = () => {
-      const a = el.querySelector('.tab.active');
+      const a = el.querySelector('.tab.active, a.active');
       if (!a) return;
       el.style.setProperty('--thumb-x', `${a.offsetLeft}px`);
       el.style.setProperty('--thumb-w', `${a.offsetWidth}px`);
@@ -159,27 +154,50 @@ export function Tabs({ tabs, active, onChange }) {
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null;
     if (ro) ro.observe(el);
     return () => ro && ro.disconnect();
-  }, [active, signature]);
+  }, [active, signature, root]);
+}
+// True one frame after the first paint, so the highlight does not slide in from nowhere.
+function useFirstPaint() {
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    const id = requestAnimationFrame(() => setReady(true)); // no slide from nowhere on the first paint
+    const id = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(id);
   }, []);
+  return ready;
+}
+// Content glides in from the side the new tab lies on. `targets` are the elements to animate.
+function glide(targets, dir) {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  targets.slice(0, 6).forEach((n, i) => {
+    if (!n || !n.animate) return;
+    n.getAnimations().forEach((a) => a.id === 'tab-swap' && a.cancel());
+    n.animate([{ opacity: 0, transform: `translate3d(${dir * 18}px, 0, 0) scale(0.992)` }, { opacity: 1, transform: 'none' }], { duration: 320, delay: i * 35, easing: SWAP_EASE, fill: 'backwards', id: 'tab-swap' });
+  });
+}
+// What follows the tab bar on the page (or the toolbar the tab bar sits in).
+function followers(el) {
+  let anchor = el.parentElement && el.parentElement.classList.contains('row') ? el.parentElement : el;
+  while (anchor && !anchor.nextElementSibling && anchor.parentElement && !anchor.parentElement.matches('main, .content, .page-enter')) anchor = anchor.parentElement;
+  const out = [];
+  for (let n = anchor ? anchor.nextElementSibling : null; n; n = n.nextElementSibling) out.push(n);
+  return out;
+}
+
+export function Tabs({ tabs, active, onChange }) {
+  const root = useRef(null);
+  const before = useRef(null);
+  const ready = useFirstPaint();
+  const keys = tabs.map((t) => (typeof t === 'string' ? t : t.key));
+  const signature = tabs.map((t) => (typeof t === 'string' ? t : `${t.key}:${t.label}`)).join('|');
+  useThumb(root, active, signature);
 
   // the content that follows glides in when the tab changes
   useLayoutEffect(() => {
     const was = before.current;
     before.current = active;
     const el = root.current;
-    if (!el || was === null || was === active || !el.animate) return;
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const dir = keys.indexOf(active) >= keys.indexOf(was) ? 1 : -1;
-    let anchor = el.parentElement && el.parentElement.classList.contains('row') ? el.parentElement : el;
-    while (anchor && !anchor.nextElementSibling && anchor.parentElement && !anchor.parentElement.matches('main, .content, .page-enter')) anchor = anchor.parentElement;
-    let n = anchor ? anchor.nextElementSibling : null;
-    for (let i = 0; n && i < 6; i += 1, n = n.nextElementSibling) {
-      n.getAnimations().forEach((a) => a.id === 'tab-swap' && a.cancel());
-      n.animate([{ opacity: 0, transform: `translateX(${dir * 18}px) scale(0.992)` }, { opacity: 1, transform: 'none' }], { duration: 320, delay: i * 35, easing: SWAP_EASE, fill: 'backwards', id: 'tab-swap' });
-    }
+    if (!el || was === null || was === active) return;
+    glide(followers(el), keys.indexOf(active) >= keys.indexOf(was) ? 1 : -1);
   }, [active]);
 
   return (
@@ -195,6 +213,36 @@ export function Tabs({ tabs, active, onChange }) {
         );
       })}
     </div>
+  );
+}
+
+// Tabs that are links (the address changes with the tab). Same sliding highlight and content glide as Tabs.
+// className picks the look ('subnav', 'pr-subs' as pills, 'pr-modules' as an underline). `glideSelector`
+// names the element that holds the content when it is not simply what follows the bar.
+export function NavTabs({ items, active, className = 'subnav', glideSelector, label }) {
+  const root = useRef(null);
+  const before = useRef(null);
+  const ready = useFirstPaint();
+  const keys = items.map((i) => i.key);
+  useThumb(root, active, items.map((i) => `${i.key}:${i.label}`).join('|'));
+  useLayoutEffect(() => {
+    const was = before.current;
+    before.current = active;
+    const el = root.current;
+    if (!el || was === null || was === active) return;
+    const dir = keys.indexOf(active) >= keys.indexOf(was) ? 1 : -1;
+    const host = glideSelector ? (el.closest('.pr') || el.parentElement).querySelector(glideSelector) : null;
+    glide(host ? [host] : followers(el), dir);
+  }, [active]);
+  return (
+    <nav className={`${className} slide-nav ${ready ? 'ready' : ''}`} ref={root} aria-label={label}>
+      <span className="tab-thumb" aria-hidden="true" />
+      {items.map((i) => (
+        <a key={i.key} href={i.href} className={active === i.key ? 'active' : ''} aria-current={active === i.key ? 'page' : undefined}>
+          {i.label}
+        </a>
+      ))}
+    </nav>
   );
 }
 

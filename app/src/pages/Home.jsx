@@ -1,6 +1,6 @@
 import { useDB } from '../store.js';
 import { Card, Btn, Avatar, EmpChip, Badge, Empty, Icon } from '../ui.jsx';
-import { useClock, go } from '../App.jsx';
+import { useClock, ClockLabel, go } from '../App.jsx';
 import { pendingFor } from './Inbox.jsx';
 import { scheduleFor, fullName, fmtDate, todayISO, onLeave, activeEmployees, parseISO, fmtTime, addDays, attendanceFor, empById } from '../utils.js';
 import { leaveBalances } from '../leave.js';
@@ -12,7 +12,7 @@ function greeting() {
 
 export default function Home({ user }) {
   const db = useDB();
-  const clock = useClock(user);
+  const clock = useClock(user, false);
   const today = todayISO();
   const now = new Date();
   const shift = scheduleFor(db, user);
@@ -48,7 +48,7 @@ export default function Home({ user }) {
           <div className="row" style={{ marginTop: 18, gap: 24, alignItems: 'flex-end' }}>
             <div>
               <div className="muted">Time today</div>
-              <div className="big-time">{clock.rec?.clockIn ? clock.label : '0h 00m'}</div>
+              <div className="big-time"><ClockLabel user={user} /></div>
               <div className="muted" style={{ fontSize: 12 }}>
                 {shift.name}: {fmtTime(shift.start)} – {fmtTime(shift.end)}
                 {clock.rec?.clockIn && ` · In at ${fmtTime(clock.rec.clockIn)}`}

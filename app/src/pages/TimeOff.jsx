@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useDB, addItem, patchItem, notify, update, uid } from '../store.js';
 import { Card, Btn, Badge, Tabs, DataTable, FormModal, PageHead, Stat, KV, toast, DateRange, confirmAction, exportCSV } from '../ui.jsx';
-import { useClock } from '../App.jsx';
+import { useClock, ClockLabel } from '../App.jsx';
 import {
   todayISO, addMonths, monthLabel, attendanceFor, arrival, minutesBetween, hm, fmtTime, fmtDate, parseISO, DAYS,
   empById, fullName, addDays, cycleRange, cycleLabel, cycleMonthOf, cycleStartOf, scheduleFor, regularizationUsage, checkRegularize, checkLeaveFromLog, checkCycleLock,
@@ -104,7 +104,7 @@ function DayBar({ rec, compact }) {
 export function Attendance({ user, admin, onBack }) {
   const db = useDB();
   const byAdmin = !!admin;
-  const clock = useClock(user);
+  const clock = useClock(user, false);
   const sd = cycleStartOf(db);
   const [ym, setYm] = useState(cycleMonthOf(todayISO(), sd));
   const [tab, setTab] = useState('log');
@@ -199,7 +199,7 @@ export function Attendance({ user, admin, onBack }) {
             <Btn kind="ghost" onClick={() => setReq({ type: 'On Duty', date: today, to: today })}>On duty</Btn>
             <Btn kind="ghost" onClick={() => setPartial(true)}>Partial leave</Btn>
             {otOn && <Btn kind="ghost" onClick={() => setOt(true)}>Overtime</Btn>}
-            <Btn icon="clock" onClick={() => clock.toggle()}>{clock.clockedIn ? `Clock out (${clock.label})` : 'Web clock in'}</Btn>
+            <Btn icon="clock" onClick={() => clock.toggle()}>{clock.clockedIn ? <>Clock out (<ClockLabel user={user} />)</> : 'Web clock in'}</Btn>
           </>
         )}
       </PageHead>
@@ -451,7 +451,7 @@ export function Leave({ user, admin, onBack }) {
         {coType && <Btn kind="ghost" onClick={() => setCompOff(true)}>Request comp off</Btn>}
         <Btn icon="plus" onClick={() => setApply(true)}>{byAdmin ? 'Add leave' : 'Apply leave'}</Btn>
       </PageHead>
-      <LeaveInsights db={db} user={user} bal={bal} tiles={tiles} year={year} />
+      <LeaveInsights db={db} user={user} year={year} />
       <Tabs tabs={[{ key: 'history', label: 'Leave history' }, { key: 'holidays', label: `Holidays ${year}` }, ...(coType ? [{ key: 'compoff', label: 'Comp off' }] : []), { key: 'policy', label: 'Leave policy' }]} active={tab} onChange={setTab} />
       {tab === 'history' && (
         <Card pad={false}>

@@ -3,7 +3,7 @@
 // loans, benefits, reports and settings.
 import { useEffect, useMemo, useState } from 'react';
 import { useDB, addItem, patchItem, removeItem, update, uid, notify } from '../store.js';
-import { Icon, Btn, Badge, DataTable, FormModal, EmpChip, Crud, Modal, FormGrid, Tabs, toast, confirmAction, exportCSV } from '../ui.jsx';
+import { Icon, Btn, Badge, DataTable, FormModal, EmpChip, Crud, Modal, FormGrid, Tabs, NavTabs, toast, confirmAction, exportCSV } from '../ui.jsx';
 import { PayslipView, DECLARATION_FIELDS } from './Finances.jsx';
 import { ApproveButtons, empCol } from './AdminOps.jsx';
 import { empById, fullName, fmtDate, money, monthLabel, payslipFor, ymOf, addMonths, addDays, todayISO, declarationTotal, cycleRange, cycleDays, payrollPeople, salaryBreakup, breakupFor, snapshotPayroll, payGroupOf, structureOf, settingsFor, structureFromSettings, groupFromSettings, COMPONENT_TYPES, MONTHS, pad } from '../utils.js';
@@ -153,23 +153,9 @@ export default function Payroll({ user }) {
 
   return (
     <div className="pr">
-      <nav className="pr-modules" aria-label="Payroll">
-        {MODULES.map((m) => (
-          <a key={m.key} href={`#/admin/payroll/${m.key}`} className={mod === m.key ? 'active' : ''}>
-            {m.label}
-          </a>
-        ))}
-      </nav>
-      {subs && (
-        <nav className="pr-subs">
-          {subs.map(([k, label]) => (
-            <a key={k} href={`#/admin/payroll/${mod}/${k}`} className={sub === k ? 'active' : ''}>
-              {label}
-            </a>
-          ))}
-        </nav>
-      )}
-      <div className="pr-body page-enter" key={`${mod}/${sub || ''}`}>
+      <NavTabs className="pr-modules" variant="underline" glideSelector=".pr-body" label="Payroll" items={MODULES.map((m) => ({ key: m.key, label: m.label, href: `#/admin/payroll/${m.key}` }))} active={mod} />
+      {subs && <NavTabs className="pr-subs" glideSelector=".pr-body" label={`${mod} sections`} items={subs.map(([k, label]) => ({ key: k, label, href: `#/admin/payroll/${mod}/${k}` }))} active={sub} />}
+      <div className="pr-body page-enter">
         <div className="pr-entity">
           <select value={entity} onChange={(e) => setEntity(e.target.value)} aria-label="Legal entity">
             {(entities.length ? entities : [db.company.name]).map((x) => (

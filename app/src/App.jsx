@@ -86,13 +86,17 @@ function nav(user) {
 }
 
 // Clock in / out from anywhere; writes today's attendance record.
-export function useClock(user) {
+// The clock for the signed-in person. Only a component that SHOWS the running seconds should ask for
+// the live clock (live = true): it then re-renders once a second. Everything else uses live = false, so
+// the page does not re-render every second, which made page changes and scrolling stutter.
+export function useClock(user, live = true) {
   const db = useDB();
   const [, tick] = useState(0);
   useEffect(() => {
+    if (!live) return undefined;
     const t = setInterval(() => tick((x) => x + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [live]);
   const today = todayISO();
   const rec = db.attendance.find((a) => a.empId === user.id && a.date === today);
   const now = new Date();
@@ -101,6 +105,8 @@ export function useClock(user) {
   const worked = rec?.clockIn ? minutesBetween(rec.clockIn, rec.clockOut || nowT) : 0;
   const secs = rec?.clockIn && !rec.clockOut ? now.getSeconds() : 0;
   const toggle = (wfh = false) => {
+    const at = new Date();
+    const nowT = `${pad(at.getHours())}:${pad(at.getMinutes())}`; // the time of the click, not of the last render
     update((d) => {
       const r = d.attendance.find((a) => a.empId === user.id && a.date === today);
       if (!r) d.attendance.push({ id: `att_${user.id}_${today}`, empId: user.id, date: today, clockIn: nowT, clockOut: '', wfh, source: 'Web', sessions: [{ in: nowT }] });
@@ -115,6 +121,24 @@ export function useClock(user) {
     toast(clockedIn ? 'Clocked out' : 'Clocked in');
   };
   return { rec, clockedIn, worked, label: `${hm(worked)}${clockedIn ? ` ${pad(secs)}s` : ''}`, toggle };
+}
+
+// Only these small pieces tick every second.
+export function ClockLabel({ user, idle = '0h 00m' }) {
+  const c = useClock(user);
+  return c.rec?.clockIn ? c.label : idle;
+}
+function ClockPill({ user }) {
+  const clock = useClock(user);
+  return (
+    <div className="clock-pill hide-sm">
+      <span className="muted hide-md">{clock.rec?.clockIn ? clock.label : 'Not clocked in'}</span>
+      <button className={`btn btn-sm ${clock.clockedIn ? 'btn-danger' : 'btn-primary'}`} onClick={() => clock.toggle()}>
+        <Icon name="clock" size={14} />
+        {clock.clockedIn ? 'Clock out' : 'Clock in'}
+      </button>
+    </div>
+  );
 }
 
 const ACTIONS = [
@@ -206,7 +230,6 @@ function Shell({ user, route }) {
     localStorage.setItem(THEME_KEY, next);
     setTheme(next);
   };
-  const clock = useClock(user);
   const path = route.join('/');
   const groups = nav(user);
   const pending = pendingFor(db, user).length;
@@ -342,13 +365,7 @@ function Shell({ user, route }) {
           <span className="topbar-company hide-md">{db.company.name}</span>
           <GlobalSearch user={user} />
           <div className="grow hide-sm" />
-          <div className="clock-pill hide-sm">
-            <span className="muted hide-md">{clock.rec?.clockIn ? clock.label : 'Not clocked in'}</span>
-            <button className={`btn btn-sm ${clock.clockedIn ? 'btn-danger' : 'btn-primary'}`} onClick={() => clock.toggle()}>
-              <Icon name="clock" size={14} />
-              {clock.clockedIn ? 'Clock out' : 'Clock in'}
-            </button>
-          </div>
+          <ClockPill user={user} />
           <div className="dropdown">
             <button className="icon-btn" aria-label="Notifications" onClick={() => setMenu(menu === 'n' ? null : 'n')}>
               <Icon name="bell" />
@@ -442,7 +459,7 @@ function Shell({ user, route }) {
             )}
           </div>
         </header>
-        <main key={`${section}/${section === 'admin' && sub === 'payroll' ? 'payroll' : sub || ''}`} className={`content ${section === 'admin' && sub === 'payroll' ? 'content-flush' : 'page-enter'}`}>
+        <main key={section === 'finances' ? 'finances' : `${section}/${section === 'admin' && sub === 'payroll' ? 'payroll' : sub || ''}`} className={`content ${section === 'admin' && sub === 'payroll' ? 'content-flush' : 'page-enter'}`}>
           {page}
         </main>
       </div>

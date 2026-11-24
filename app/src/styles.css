@@ -2346,3 +2346,53 @@ p {
     transition: none !important;
   }
 }
+
+/* Leave overview: everything below starts when .lv-ready is added (see LeaveInsights.jsx) */
+.lv-arc {
+  stroke-dasharray: 0 var(--circ);
+  transition: stroke-dasharray 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.lv-ready .lv-arc {
+  stroke-dasharray: var(--len) var(--circ);
+}
+.lv-seg {
+  height: 0;
+}
+.lv-ready .lv-seg {
+  height: var(--h);
+}
+.lv-pips span {
+  transform: scaleY(0.15);
+  opacity: 0;
+}
+.lv-ready .lv-pips span {
+  transform: none;
+  opacity: 1;
+}
+.lv-bubble {
+  transform: scale(0);
+}
+.lv-ready .lv-bubble {
+  transform: scale(1);
+}
+@keyframes lv-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.lv-year-grid {
+  animation: lv-sweep 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.lv-year-grid i {
+  animation: none;
+}
+.lv-year-grid i.today {
+  animation: lv-glow 1.8s ease-in-out 1.4s 3;
+}
+.lv-bar.now::after {
+  animation-iteration-count: 3;
+}
+
