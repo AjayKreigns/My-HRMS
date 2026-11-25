@@ -282,6 +282,13 @@ function Shell({ user, route }) {
       page = <Home user={user} />;
   }
 
+  // A page opens at the top: the scroll position belongs to the window, so it would otherwise carry over
+  // from the page you just left.
+  const pageKey = section === 'finances' ? 'finances' : `${section}/${section === 'admin' && sub === 'payroll' ? 'payroll' : sub || ''}`;
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pageKey]);
+
   useEffect(() => {
     const onKey = (e) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b' || e.altKey || e.shiftKey) return;
@@ -459,7 +466,7 @@ function Shell({ user, route }) {
             )}
           </div>
         </header>
-        <main key={section === 'finances' ? 'finances' : `${section}/${section === 'admin' && sub === 'payroll' ? 'payroll' : sub || ''}`} className={`content ${section === 'admin' && sub === 'payroll' ? 'content-flush' : 'page-enter'}`}>
+        <main key={pageKey} className={`content ${section === 'admin' && sub === 'payroll' ? 'content-flush' : 'page-enter'}`}>
           {page}
         </main>
       </div>

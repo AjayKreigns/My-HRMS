@@ -11,8 +11,10 @@
   --glass-shadow: 0 1px 2px rgba(15, 40, 60, 0.04), 0 10px 30px rgba(15, 40, 60, 0.07);
   --glass-shadow-hover: 0 2px 4px rgba(15, 40, 60, 0.05), 0 18px 40px rgba(15, 40, 60, 0.12);
   --blur: blur(22px) saturate(180%);
+  --menu-bg: #fff;
 }
 .theme-dark {
+  --menu-bg: #101d2c;
   --glass: rgba(18, 32, 48, 0.68);
   --glass-strong: rgba(18, 32, 48, 0.82);
   --glass-line: rgba(255, 255, 255, 0.08);
@@ -126,12 +128,18 @@
 .theme-dark .topbar .searchbox {
   background: rgba(255, 255, 255, 0.05);
 }
-.dropdown-menu,
-.global-search .results,
 .modal {
   background: var(--glass-strong);
   -webkit-backdrop-filter: blur(30px) saturate(190%);
   backdrop-filter: blur(30px) saturate(190%);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-edge), var(--shadow-lg);
+}
+/* Menus float over the top bar, whose own blur stops theirs from working, so the page showed through
+   the text. They are solid instead. */
+.dropdown-menu,
+.global-search .results {
+  background: var(--menu-bg);
   border: 1px solid var(--glass-line);
   box-shadow: var(--glass-edge), var(--shadow-lg);
 }
@@ -386,6 +394,13 @@
   box-shadow: 0 1px 3px rgba(16, 32, 52, 0.12);
   pointer-events: none;
 }
+/* dark theme: the selected tab is a raised, lighter pill so it stands out from the bar like the white one does in light */
+.theme-dark .tabs .tab-thumb,
+.theme-dark .subnav .tab-thumb,
+.theme-dark .pr-subs .tab-thumb {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.09));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
 .tabs.ready .tab-thumb {
   transition: transform 0.5s var(--ease-spring), width 0.5s var(--ease-spring);
 }
@@ -576,6 +591,229 @@
   border-radius: 3px 3px 0 0;
   background: var(--brand);
   box-shadow: none;
+}
+
+/* ---- Scrollbars ----
+   Ribbed capsule thumb on a hairline rail, in the brand colour. Each kind of scroller gets its own look:
+   the page has the full ribbed capsule, the sidebar only shows a thin light line while hovered,
+   menus and dialogs get a small soft capsule, and wide tables get a slim bar with a leading dot. */
+:root {
+  --sb-thumb: linear-gradient(180deg, var(--brand), var(--brand-dark));
+  --sb-thumb-h: linear-gradient(90deg, var(--brand), var(--brand-dark));
+  --sb-rib: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0 1px, transparent 1px 4px);
+  --sb-rib-h: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.5) 0 1px, transparent 1px 4px);
+  --sb-rail: color-mix(in srgb, var(--brand) 16%, transparent);
+  --sb-dot: rgba(37, 99, 235, 0.32);
+}
+.theme-dark {
+  --sb-dot: rgba(147, 197, 253, 0.3);
+}
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* the rail: a single hairline down the middle of the track */
+::-webkit-scrollbar-track:vertical {
+  background: radial-gradient(circle at 50% 50%, var(--sb-dot) 0 1px, transparent 1.5px) 0 0 / 14px 7px repeat-y;
+}
+::-webkit-scrollbar-track:horizontal {
+  background: linear-gradient(180deg, transparent 6px, var(--sb-rail) 6px 8px, transparent 8px);
+}
+::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 10px;
+  background-clip: padding-box;
+  min-height: 48px;
+  min-width: 48px;
+}
+/* same glowing capsule as the sidebar, with the colours turned round: dark at the top, light at the bottom */
+::-webkit-scrollbar-thumb:vertical {
+  background-image: linear-gradient(180deg, #2563eb, #38bdf8 55%, #bae6fd);
+  box-shadow: 0 0 6px 1px rgba(37, 99, 235, 0.35);
+}
+::-webkit-scrollbar-thumb:horizontal {
+  background-image: var(--sb-rib-h), var(--sb-thumb-h);
+}
+::-webkit-scrollbar-thumb:hover {
+  border-width: 3px;
+  filter: brightness(1.12);
+}
+::-webkit-scrollbar-thumb:active {
+  border-width: 2px;
+}
+::-webkit-scrollbar-thumb:vertical:hover,
+::-webkit-scrollbar-thumb:vertical:active {
+  background-image: linear-gradient(180deg, #1d4ed8, #0ea5e9 50%, #7dd3fc);
+}
+
+/* sidebar: a glowing sky-blue pip on a dotted rail. The list also fades out at whichever edge has more
+   to scroll to, so you can tell there is more menu above or below. */
+@property --sn-fade-t {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --sn-fade-b {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+.side-nav::-webkit-scrollbar {
+  width: 12px;
+}
+.side-nav::-webkit-scrollbar-track {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.22) 0 1px, transparent 1.5px) 0 0 / 12px 7px repeat-y !important;
+}
+.side-nav::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 6px;
+  background-image: linear-gradient(180deg, #bae6fd, #38bdf8 55%, #2563eb) !important;
+  background-clip: padding-box;
+  min-height: 36px;
+  box-shadow: 0 0 6px 1px rgba(56, 189, 248, 0.6);
+}
+.side-nav:hover::-webkit-scrollbar-thumb {
+  border-width: 3px;
+  filter: none;
+}
+.side-nav::-webkit-scrollbar-thumb:hover,
+.side-nav::-webkit-scrollbar-thumb:active {
+  border-width: 2px;
+  background-image: linear-gradient(180deg, #e0f2fe, #7dd3fc 50%, #3b82f6) !important;
+}
+@supports (animation-timeline: scroll()) {
+  .side-nav {
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--sn-fade-t), #000 calc(100% - var(--sn-fade-b)), transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0, #000 var(--sn-fade-t), #000 calc(100% - var(--sn-fade-b)), transparent 100%);
+    animation: sn-fade-top linear both, sn-fade-bottom linear both;
+    animation-timeline: scroll(self), scroll(self);
+    animation-range: 0px 48px, calc(100% - 48px) 100%;
+  }
+}
+/* folded sidebar: only 72px wide, so the scrollbar shrinks to a slim glowing pip at the very edge and the
+   icons and highlight keep their centred position (the padding gives back what the bar takes) */
+@media (min-width: 901px) {
+  .side-nav {
+    transition: padding 0.5s var(--ease-spring);
+  }
+  .shell.collapsed .side-nav {
+    padding-right: 6px;
+  }
+  .shell.collapsed .side-nav .nav-thumb {
+    right: 6px;
+  }
+  .shell.collapsed .side-nav::-webkit-scrollbar {
+    width: 6px;
+  }
+  .shell.collapsed .side-nav::-webkit-scrollbar-track {
+    background: none !important;
+  }
+  .shell.collapsed .side-nav::-webkit-scrollbar-thumb {
+    border-width: 1px;
+    border-radius: 4px;
+    box-shadow: 0 0 5px 1px rgba(56, 189, 248, 0.55);
+  }
+  .shell.collapsed .side-nav::-webkit-scrollbar-thumb:hover {
+    border-width: 0;
+  }
+}
+@keyframes sn-fade-top {
+  from {
+    --sn-fade-t: 0px;
+  }
+  to {
+    --sn-fade-t: 34px;
+  }
+}
+@keyframes sn-fade-bottom {
+  from {
+    --sn-fade-b: 34px;
+  }
+  to {
+    --sn-fade-b: 0px;
+  }
+}
+
+/* menus, search results, multi-selects: small and soft */
+.results::-webkit-scrollbar,
+.multi::-webkit-scrollbar,
+.emp-pick-list::-webkit-scrollbar,
+.pr-activity::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.results::-webkit-scrollbar-track,
+.emp-pick-list::-webkit-scrollbar-track,
+.multi::-webkit-scrollbar-track,
+.pr-activity::-webkit-scrollbar-track {
+  background: none;
+}
+.results::-webkit-scrollbar-thumb,
+.emp-pick-list::-webkit-scrollbar-thumb,
+.multi::-webkit-scrollbar-thumb,
+.pr-activity::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  background-image: none;
+  background-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  min-height: 28px;
+}
+.results::-webkit-scrollbar-thumb:hover,
+.emp-pick-list::-webkit-scrollbar-thumb:hover,
+.multi::-webkit-scrollbar-thumb:hover,
+.pr-activity::-webkit-scrollbar-thumb:hover {
+  background-color: var(--brand);
+}
+
+/* anything that scrolls sideways (tables, tab strips, boards, trees): a slim bar with a round head */
+::-webkit-scrollbar:horizontal {
+  height: 10px;
+}
+::-webkit-scrollbar-track:horizontal {
+  background: linear-gradient(180deg, transparent 4px, var(--sb-rail) 4px 6px, transparent 6px);
+}
+::-webkit-scrollbar-thumb:horizontal {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-image: radial-gradient(circle at 5px 50%, #fff 0 1.5px, transparent 2px), var(--sb-thumb-h);
+}
+
+/* Firefox has no pseudo-element scrollbars: a thin line in the brand colour */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--brand) transparent;
+  }
+  .side-nav {
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  }
+}
+
+/* Dark theme: text colours that were picked for a white page are lifted so they read on navy */
+.theme-dark .stat-red .stat-value,
+.theme-dark .form-error,
+.theme-dark .req {
+  color: #f87171;
+}
+.theme-dark .stat-amber .stat-value {
+  color: #fbbf24;
+}
+.theme-dark .stat-green .stat-value {
+  color: #4ade80;
+}
+.theme-dark .lv-cap-num,
+.theme-dark .lv-next {
+  color: color-mix(in srgb, var(--c) 45%, #fff);
+}
+.theme-dark input[type='file']::file-selector-button {
+  background: #1d3045;
+  color: var(--ink);
+  border: 1px solid #2a4560;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-right: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {

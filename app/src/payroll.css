@@ -396,8 +396,7 @@
   grid-template-columns: repeat(12, minmax(100px, 1fr));
   gap: 12px;
   overflow-x: auto;
-  scrollbar-width: thin;
-}
+  }
 .pr-cycle {
   display: flex;
   flex-direction: column;
