@@ -767,6 +767,14 @@ p {
   gap: 8px;
   font-size: 13px;
 }
+.check-help {
+  grid-column: 1 / -1;
+}
+.check-help small {
+  display: block;
+  margin: 3px 0 0 24px;
+  font-size: 12px;
+}
 .radios {
   display: flex;
   gap: 16px;
@@ -802,6 +810,51 @@ p {
 .multi-opt.on {
   background: var(--brand-soft);
   color: var(--brand);
+}
+.emp-multi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 150px;
+  overflow: auto;
+  margin-bottom: 8px;
+}
+.emp-multi-chips .multi-opt {
+  cursor: default;
+  padding: 3px 4px 3px 10px;
+}
+.emp-multi-chips .multi-opt button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.emp-multi-chips .multi-opt button:hover {
+  background: rgba(127, 127, 127, 0.25);
+}
+.emp-multi-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.emp-multi-actions .link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.emp-multi-actions .link-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .multi-opt input {
   display: none;
@@ -1004,23 +1057,113 @@ p {
 }
 .toasts {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 20px;
+  bottom: 20px;
+  width: min(350px, calc(100vw - 24px));
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 200;
+  z-index: 300;
+  pointer-events: none;
 }
 .toast {
-  background: var(--ink);
-  color: #fff;
-  padding: 10px 14px;
-  border-radius: var(--r-md);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
-  max-width: 320px;
+  --tc: #0f9d6a;
+  --tc-soft: #dcf4ea;
+  pointer-events: auto;
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 24px;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 9px 14px 12px;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 16px 38px rgba(10, 22, 36, 0.28), 0 2px 6px rgba(10, 22, 36, 0.12);
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  animation: toast-in 0.45s var(--ease-spring, cubic-bezier(0.2, 0.9, 0.3, 1.2)) both;
 }
 .toast-error {
-  background: var(--red);
+  --tc: #d6392b;
+  --tc-soft: #fde4e0;
+}
+.toast-info {
+  --tc: var(--brand);
+  --tc-soft: var(--brand-soft);
+}
+.toast-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--tc-soft);
+  color: var(--tc);
+}
+.toast-text {
+  overflow-wrap: anywhere;
+}
+.toast-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.toast-close:hover {
+  background: var(--panel);
+  color: var(--ink);
+}
+.toast-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--tc);
+  transform-origin: left;
+  animation: toast-bar var(--toast-ms, 4800ms) linear forwards;
+}
+.toast:hover .toast-bar {
+  animation-play-state: paused;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes toast-bar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (max-width: 560px) {
+  .toasts {
+    right: 12px;
+    bottom: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
 }
 .modal-backdrop {
   position: fixed;
@@ -1061,15 +1204,26 @@ p {
 }
 .modal-foot {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 22px;
+  gap: 10px;
+  padding: 16px 22px;
   background: var(--panel);
   border-top: 1px solid var(--line-soft);
 }
+/* Buttons in a dialog footer are one size, so Cancel and Save line up. */
+.modal-foot .btn {
+  min-height: 40px;
+  min-width: 92px;
+  justify-content: center;
+  box-sizing: border-box;
+}
+/* A footer that sits inside the dialog body (a few dialogs build their own): a rule above, no band. */
 .modal-foot.inline {
   padding: 16px 0 0;
   margin-top: 16px;
+  background: transparent;
 }
 .hero {
   position: relative;
@@ -1455,8 +1609,18 @@ p {
   border-color: var(--line);
 }
 .theme-dark .toast {
-  background: #e2e8eb;
-  color: #0b151d;
+  background: #15283c;
+  border-color: rgba(255, 255, 255, 0.14);
+  --tc: #3ecf9b;
+  --tc-soft: rgba(62, 207, 155, 0.16);
+}
+.theme-dark .toast-error {
+  --tc: #ff7a63;
+  --tc-soft: rgba(255, 122, 99, 0.18);
+}
+.theme-dark .toast-info {
+  --tc: #6ea8ff;
+  --tc-soft: rgba(110, 168, 255, 0.16);
 }
 
 @media print {
@@ -2394,3 +2558,74 @@ p {
   animation-iteration-count: 3;
 }
 
+
+/* ---------- dropdown ---------- */
+.dd {
+  position: relative;
+  display: inline-block;
+}
+.dd-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 8px;
+  text-align: left;
+}
+.dd-btn svg {
+  color: var(--muted);
+  transition: transform 0.2s ease;
+}
+.dd-btn:hover svg {
+  color: var(--ink);
+}
+.dd-btn[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.dd-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+}
+.dd-menu {
+  position: absolute;
+  left: -10px;
+  top: calc(100% + 8px);
+  z-index: 60;
+  min-width: 260px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--menu-bg, var(--white));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+.dd-menu li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.dd-menu li.at {
+  background: var(--brand-soft);
+}
+.dd-menu li[aria-selected='true'] {
+  font-weight: 700;
+}
+.dd-menu li svg {
+  color: var(--brand);
+}

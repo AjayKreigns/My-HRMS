@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useDB, update, notify, uid } from '../store.js';
 import { Card, Btn, Badge, Tabs, EmpChip, Empty, PageHead, Modal, toast, DateRange } from '../ui.jsx';
-import { empById, fmtDate, fmtTime, money, todayISO, hm, minutesBetween } from '../utils.js';
+import { empById, fmtDate, fmtTime, fullName, money, monthLabel, todayISO, hm, minutesBetween } from '../utils.js';
+import { revisionArrears } from '../arrears.js';
+import { canApproveRun, canApproveUnlock, runSummary, approveRun, rejectRun, approveUnlock, rejectUnlock } from '../payrollApproval.js';
 
 const SOURCES = [
   {
@@ -43,9 +45,17 @@ export function pendingFor(db, user) {
       if (r.status === (s.status || 'Pending') && canAct(db, user, r.empId)) out.push({ key: `${s.col}:${r.id}`, src: s, row: r, empId: r.empId, title: s.title(r, db), date: r.appliedOn || r.createdAt || r.date || r.from });
     });
   });
+  // Payroll waiting for this person as an approver: a month submitted for approval, or a request to unlock one.
+  (db.payrollRuns || []).forEach((r) => {
+    const who = (id) => fullName(empById(db, id));
+    if (canApproveRun(db, user, r)) out.push({ key: `payrollRuns:${r.id}`, payroll: 'run', src: { kind: 'Payroll', detail: () => `Submitted by ${who(r.submittedBy)} on ${fmtDate(r.submittedAt.slice(0, 10))}` }, row: r, empId: r.submittedBy, title: `Payroll for ${monthLabel(r.month)} needs your approval` });
+    if (canApproveUnlock(db, user, r)) out.push({ key: `payrollUnlock:${r.id}`, payroll: 'unlock', src: { kind: 'Payroll unlock', detail: () => `${who(r.unlockRequest.by)} asked: ${r.unlockRequest.reason}` }, row: r, empId: r.unlockRequest.by, title: `Unlock payroll for ${monthLabel(r.month)}` });
+  });
   (db.reviews || []).forEach((r) => {
     if (r.reviewerId === user.id && r.status === 'Manager review pending') out.push({ key: `reviews:${r.id}`, src: { kind: 'Review', col: 'reviews' }, row: r, empId: r.empId, title: 'Performance review waiting for your rating', link: true });
   });
+  // Payroll waits on a whole company, so it goes first.
+  out.sort((x, y) => (y.payroll ? 1 : 0) - (x.payroll ? 1 : 0));
   return out;
 }
 
@@ -68,10 +78,64 @@ export function decide(db, item, status, comment, user) {
     }
     if (status === 'Approved' && src.col === 'promotions') {
       const e = d.employees.find((x) => x.id === r.empId);
+      // A revision dated in months that are already locked owes arrears. They go into the open payroll month,
+      // and PF is due on their basic too.
+      const ar = revisionArrears(d, e, Number(r.oldCtc || e.ctc), Number(r.newCtc), r.effectiveFrom);
+      if (ar.amount > 0 && !(d.payrollAdjustments || []).some((a) => a.promoId === r.id)) {
+        d.payrollAdjustments.push({ id: uid('adj'), empId: e.id, month: ar.openMonth, kind: 'Arrears', amount: ar.amount, pfBasis: ar.pfBasic, note: `Revision from ${fmtDate(r.effectiveFrom)}, ${ar.months.length} month(s)`, promoId: r.id, auto: true });
+      }
       Object.assign(e, { designation: r.newDesignation, ctc: Number(r.newCtc), gradeId: r.newGradeId || e.gradeId });
     }
   });
   notify(row.empId, `Your ${src.kind.toLowerCase()} request was ${status.toLowerCase()}${comment ? `: “${comment}”` : '.'}`);
+}
+
+// A payroll month waiting for an approver: the totals, then approve or send back with a reason.
+function PayrollDecision({ db, user, item, onClose }) {
+  const [reason, setReason] = useState('');
+  const run = item.row;
+  const ym = run.month;
+  const unlock = item.payroll === 'unlock';
+  const sum = runSummary(db, ym);
+  const act = (approve) => {
+    if (!approve && !reason.trim()) return toast(unlock ? 'Say why you are declining.' : 'Say what needs fixing.', 'error');
+    let res;
+    update((d) => {
+      res = unlock ? (approve ? approveUnlock(d, ym, user) : rejectUnlock(d, ym, user, reason)) : approve ? approveRun(d, ym, user) : rejectRun(d, ym, user, reason);
+    });
+    if (!res.ok) return toast(res.error, 'error');
+    toast(unlock ? (approve ? 'Payroll unlocked' : 'Request declined') : approve ? `Payroll for ${monthLabel(ym)} approved and locked` : 'Sent back');
+    onClose();
+  };
+  const rows = [['Employees', sum.people + (sum.held ? ` (${sum.held} on hold)` : '')], ['Gross pay', money(sum.gross)], ['Deductions', money(sum.deductions)], ['Net pay', money(sum.net)], ['Employer contributions', money(sum.employer)], ['Total cost', money(sum.cost)]];
+  return (
+    <Modal
+      title={unlock ? `Unlock payroll for ${monthLabel(ym)}?` : `Approve payroll for ${monthLabel(ym)}?`}
+      onClose={onClose}
+      footer={
+        <>
+          <Btn kind="danger" onClick={() => act(false)}>{unlock ? 'Decline' : 'Send back'}</Btn>
+          <Btn kind="success" icon="check" onClick={() => act(true)}>{unlock ? 'Approve unlock' : 'Approve & lock'}</Btn>
+        </>
+      }
+    >
+      <EmpChip emp={empById(db, item.empId)} sub={unlock ? 'Asked to unlock' : 'Submitted for approval'} />
+      {unlock && <p style={{ margin: '12px 0' }}>Reason given: “{run.unlockRequest.reason}”</p>}
+      <ul className="list" style={{ margin: '12px 0' }}>
+        {rows.map(([k, v]) => (
+          <li key={k} style={{ justifyContent: 'space-between' }}>
+            <span className="muted">{k}</span>
+            <strong>{v}</strong>
+          </li>
+        ))}
+      </ul>
+      {user.role === 'admin' && <p style={{ marginBottom: 12 }}><a href={`#/admin/payroll/run/${ym}`}>Open the full payroll for this month</a></p>}
+      <div className="field">
+        <label htmlFor="pr-reason">{unlock ? 'Note (needed to decline)' : 'Note (needed to send back)'}</label>
+        <textarea id="pr-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
+      </div>
+    </Modal>
+  );
 }
 
 export default function Inbox({ user }) {
@@ -79,6 +143,7 @@ export default function Inbox({ user }) {
   const [tab, setTab] = useState('pending');
   const [acting, setActing] = useState(null);
   const [comment, setComment] = useState('');
+  const [payroll, setPayroll] = useState(null);
   const pending = pendingFor(db, user);
   const archive = [];
   SOURCES.forEach((s) => (db[s.col] || []).forEach((r) => r.actedBy === user.id && archive.push({ key: `${s.col}:${r.id}`, src: s, row: r, empId: r.empId, title: s.title(r, db) })));
@@ -117,7 +182,9 @@ export default function Inbox({ user }) {
                   </div>
                 </div>
                 {tab === 'pending' ? (
-                  it.link ? (
+                  it.payroll ? (
+                    <Btn small onClick={() => setPayroll(it)}>Review</Btn>
+                  ) : it.link ? (
                     <a className="btn btn-ghost btn-sm" href="#/me/performance?reviews">Open review</a>
                   ) : (
                     <div className="row">
@@ -133,6 +200,7 @@ export default function Inbox({ user }) {
           </ul>
         )}
       </Card>
+      {payroll && <PayrollDecision db={db} user={user} item={payroll} onClose={() => setPayroll(null)} />}
       {acting && (
         <Modal
           title={`${acting.item.src.kind}: ${acting.item.title}`}

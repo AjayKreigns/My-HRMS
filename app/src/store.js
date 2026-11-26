@@ -3,6 +3,7 @@
 import { useEffect, useReducer } from 'react';
 import { seed, seedLeaveTypes } from './seed.js';
 import { structureFromSettings, groupFromSettings, freezeLockedRuns } from './utils.js';
+import { recordChanges } from './auditLog.js';
 import { removeLeaveFor, sampleLeaveFor } from './leave.js';
 
 // Sample data: Imran Sheikh (E122) has no leave at all, to show absent days with no balance.
@@ -72,6 +73,24 @@ function upgrade(db) {
     removeLeaveFor(db, NO_LEAVE_EMPLOYEE);
     db.migrations.push('sample-no-leave-1');
   }
+  if (!db.migrations.includes('pf-rules-1')) {
+    // The PF wage ceiling now follows the dated statutory rules (Payroll > Settings > PF & ESI). The old 15,000 stored on
+    // the company and its pay groups was only the standard value, so it is dropped; a different amount stays as that group's own ceiling.
+    delete db.payrollSettings.pfCeiling;
+    (db.payGroups || []).forEach((g) => {
+      if (Number(g.pfCeiling) === 15000) delete g.pfCeiling;
+    });
+    db.migrations.push('pf-rules-1');
+  }
+  if (!db.migrations.includes('pt-slabs-1')) {
+    // Professional Tax now follows the state slabs. The flat 208 that was stored was only the old standard, so it is dropped;
+    // any other amount stays as that pay group's fixed amount.
+    if (Number(db.payrollSettings.ptAmount) === 208) delete db.payrollSettings.ptAmount;
+    (db.payGroups || []).forEach((g) => {
+      if (Number(g.ptAmount) === 208) delete g.ptAmount;
+    });
+    db.migrations.push('pt-slabs-1');
+  }
   // Months already locked keep the payslips they were paid with.
   freezeLockedRuns(db);
   return db;
@@ -118,6 +137,8 @@ const clone = typeof structuredClone === 'function' ? structuredClone : (x) => J
 export function update(fn) {
   const next = clone(state);
   fn(next);
+  // Pay-related changes to people and payroll settings are written to the audit log, with who made them.
+  recordChanges(state, next, getSessionId());
   state = next;
   save();
 }

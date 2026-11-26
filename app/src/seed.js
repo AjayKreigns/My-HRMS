@@ -50,7 +50,7 @@ export function seedLeaveTypes() {
   ];
 }
 
-const PAYROLL_SETTINGS = { basicPct: 40, hraPct: 50, conveyance: 1600, medical: 1250, pfEnabled: true, pfCeiling: 15000, esiEnabled: true, ptEnabled: true, ptAmount: 208, lwfEnabled: true, lwfEmployee: 20, lwfEmployer: 40, payDay: 'Last working day', lockDay: 25, cycleStartDay: 26, payGroup: 'iFluids Monthly' };
+const PAYROLL_SETTINGS = { basicPct: 40, hraPct: 50, conveyance: 1600, medical: 1250, pfEnabled: true, esiEnabled: true, ptEnabled: true, lwfEnabled: true, lwfEmployee: 20, lwfEmployer: 40, payDay: 'Last working day', lockDay: 25, cycleStartDay: 26, payGroup: 'iFluids Monthly' };
 
 const PASSWORDS = { 'admin@ifluids.com': 'Admin@123', 'manager@ifluids.com': 'Manager@123', 'employee@ifluids.com': 'Employee@123' };
 
@@ -260,6 +260,10 @@ export function seed() {
     // Every month of the financial year so far has been paid (in April, the last three months).
     payStructures: [structureFromSettings(PAYROLL_SETTINGS)],
     payGroups: [groupFromSettings(PAYROLL_SETTINGS)],
+    attendanceResolutions: [],
+    challans: [],
+    auditLog: [],
+    payslipOutbox: [],
     payrollRuns: Array.from({ length: ((Number(ym.slice(5)) + 8) % 12) || 3 }, (_, i) => i + 1).map((n) => ({ id: `run${n}`, month: addMonths(ym, -n), status: 'Paid', processedOn: `${addMonths(ym, -n + 1)}-01`, processedAt: `${addMonths(ym, -n + 1)}-01T15:57:00`, processedBy: 'E103', steps: {} })),
     payrollAdjustments: [],
     payrollHolds: [],

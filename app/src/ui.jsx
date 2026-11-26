@@ -1,5 +1,5 @@
 // Shared UI building blocks: icons, cards, tables, forms, dialogs and toasts.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDB, addItem, patchItem, removeItem } from './store.js';
 import { fullName, initials, fmtDate, activeEmployees } from './utils.js';
@@ -275,25 +275,125 @@ export function Btn({ children, kind = 'primary', icon, small, ...rest }) {
 }
 
 // ---------- toasts ----------
+// A message that appears at the top of the page, above any dialog, and stays long enough to read (longer for errors).
+// It pauses while the pointer is over it and can be closed.
 let pushToast = () => {};
 export function toast(text, tone = 'ok') {
   pushToast({ id: Math.random(), text, tone });
 }
+function ToastItem({ t, done }) {
+  const ms = t.tone === 'error' ? 7500 : 4800;
+  const timer = useRef(null);
+  const started = useRef(0);
+  const left = useRef(ms);
+  const start = () => {
+    started.current = Date.now();
+    timer.current = setTimeout(done, left.current);
+  };
+  const stop = () => {
+    clearTimeout(timer.current);
+    left.current -= Date.now() - started.current;
+  };
+  useEffect(() => {
+    start();
+    return () => clearTimeout(timer.current);
+  }, []);
+  const tone = ['ok', 'error', 'info'].includes(t.tone) ? t.tone : 'ok';
+  return (
+    <div className={`toast toast-${tone}`} style={{ '--toast-ms': `${ms}ms` }} role={tone === 'error' ? 'alert' : 'status'} onMouseEnter={stop} onMouseLeave={start}>
+      <span className="toast-icon" aria-hidden="true">
+        <Icon name={tone === 'ok' ? 'check' : tone === 'error' ? 'alert' : 'info'} size={18} />
+      </span>
+      <span className="toast-text">{t.text}</span>
+      <button className="toast-close" onClick={done} aria-label="Dismiss message">
+        <Icon name="x" size={15} />
+      </button>
+      <i className="toast-bar" />
+    </div>
+  );
+}
 export function Toasts() {
   const [items, setItems] = useState([]);
   useEffect(() => {
-    pushToast = (t) => {
-      setItems((s) => [...s, t]);
-      setTimeout(() => setItems((s) => s.filter((x) => x.id !== t.id)), 3200);
-    };
+    pushToast = (t) => setItems((s) => [...s.slice(-3), t]);
   }, []);
   return (
-    <div className="toasts">
+    <div className="toasts" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className={`toast toast-${t.tone}`}>
-          {t.text}
-        </div>
+        <ToastItem key={t.id} t={t} done={() => setItems((s) => s.filter((x) => x.id !== t.id))} />
       ))}
+    </div>
+  );
+}
+
+// A dropdown that looks like the rest of the app: a button that opens a short list, with keyboard support.
+// Use it where a native <select> would open a list in the browser's own style.
+export function Dropdown({ value, options, onChange, label, className = '' }) {
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState(0);
+  const ref = useRef(null);
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const cur = opts.find((o) => o.value === value) || opts[0];
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = (e) => !ref.current?.contains(e.target) && setOpen(false);
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  const pick = (o) => {
+    onChange(o.value);
+    setOpen(false);
+  };
+  const key = (e) => {
+    if (e.key === 'Escape') return setOpen(false);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) return setOpen(true);
+      return setAt((i) => (i + (e.key === 'ArrowDown' ? 1 : opts.length - 1)) % opts.length);
+    }
+    if ((e.key === 'Enter' || e.key === ' ') && open) {
+      e.preventDefault();
+      pick(opts[at]);
+    }
+    return undefined;
+  };
+  return (
+    <div className={`dd ${className}`} ref={ref}>
+      <button
+        type="button"
+        className="dd-btn"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => {
+          setAt(Math.max(0, opts.indexOf(cur)));
+          setOpen(!open);
+        }}
+        onKeyDown={key}
+      >
+        <span>{cur?.label}</span>
+        <Icon name="chevronDown" size={16} />
+      </button>
+      {open && (
+        <ul className="dd-menu" role="listbox" aria-label={label}>
+          {opts.map((o, i) => (
+            <li
+              key={o.value}
+              role="option"
+              aria-selected={o.value === cur?.value}
+              className={i === at ? 'at' : ''}
+              onMouseEnter={() => setAt(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(o);
+              }}
+            >
+              <span>{o.label}</span>
+              {o.value === cur?.value && <Icon name="check" size={15} />}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -345,6 +445,129 @@ function resolveOptions(field, db, values) {
 }
 
 // Choose an employee by typing part of the name, the employee number or the job title.
+// Pick several employees by searching: chosen people show as chips you can remove.
+function MultiEmployeePicker({ common, value, onChange, db }) {
+  const people = useMemo(() => activeEmployees(db), [db]);
+  const sel = Array.isArray(value) ? value : [];
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [at, setAt] = useState(0);
+  const needle = q.trim().toLowerCase();
+  const found = people
+    .filter((e) => !sel.includes(e.id) && (!needle || [fullName(e), e.empNo, e.id, e.designation, e.department].some((x) => String(x || '').toLowerCase().includes(needle))))
+    .slice(0, 50);
+  const nameOf = (id) => {
+    const e = db.employees.find((x) => x.id === id);
+    return e ? fullName(e) : id;
+  };
+  const add = (e) => {
+    onChange([...sel, e.id]);
+    setQ('');
+    setAt(0);
+  };
+  const key = (ev) => {
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      setOpen(true);
+      setAt((i) => Math.min(i + 1, found.length - 1));
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      setAt((i) => Math.max(i - 1, 0));
+    } else if (ev.key === 'Enter' && open) {
+      ev.preventDefault(); // choose, do not submit the form
+      if (found[at]) add(found[at]);
+    } else if (ev.key === 'Escape' && open) {
+      ev.stopPropagation();
+      setOpen(false);
+      setQ('');
+    } else if (ev.key === 'Backspace' && !q && sel.length) {
+      onChange(sel.slice(0, -1));
+    }
+  };
+  return (
+    <div className="emp-multi">
+      {sel.length > 0 && (
+        <div className="emp-multi-chips">
+          {sel.map((id) => (
+            <span key={id} className="multi-opt on">
+              {nameOf(id)}
+              {!common.disabled && (
+                <button type="button" aria-label={`Remove ${nameOf(id)}`} onClick={() => onChange(sel.filter((x) => x !== id))}>
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="emp-pick">
+        <input
+          id={common.id}
+          name={common.name}
+          type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={`${common.id}_list`}
+          aria-autocomplete="list"
+          autoComplete="off"
+          disabled={common.disabled}
+          placeholder="Search by name or employee number to add"
+          value={q}
+          onFocus={() => {
+            setOpen(true);
+            setAt(0);
+          }}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+            setAt(0);
+          }}
+          onBlur={() => {
+            setOpen(false);
+            setQ('');
+          }}
+          onKeyDown={key}
+        />
+        {open && (
+          <ul className="emp-pick-list" id={`${common.id}_list`} role="listbox">
+            {found.length === 0 && <li className="emp-pick-none">{needle ? `No employee matches "${q}".` : 'Everyone is already added.'}</li>}
+            {found.map((e, i) => (
+              <li
+                key={e.id}
+                role="option"
+                aria-selected="false"
+                className={i === at ? 'on' : ''}
+                onMouseDown={(ev) => {
+                  ev.preventDefault();
+                  add(e);
+                }}
+                onMouseEnter={() => setAt(i)}
+              >
+                <span>{fullName(e)}</span>
+                <small className="muted">
+                  {e.empNo}
+                  {e.designation ? ` · ${e.designation}` : ''}
+                </small>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {!common.disabled && (
+        <div className="emp-multi-actions">
+          <span className="muted">{sel.length} selected</span>
+          <button type="button" className="link-btn" onClick={() => onChange(people.map((e) => e.id))} disabled={sel.length >= people.length}>
+            Add everyone
+          </button>
+          <button type="button" className="link-btn" onClick={() => onChange([])} disabled={!sel.length}>
+            Clear all
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EmployeePicker({ common, value, onChange, db, placeholder }) {
   const people = useMemo(() => activeEmployees(db), [db]);
   const chosen = people.find((e) => e.id === value) || db.employees.find((e) => e.id === value);
@@ -465,6 +688,9 @@ export function Field({ field, value, onChange, db, values }) {
       );
       break;
     }
+    case 'employeesearch':
+      input = <MultiEmployeePicker common={common} value={value} onChange={onChange} db={db} />;
+      break;
     case 'multiemployee': {
       const sel = Array.isArray(value) ? value : [];
       input = (
@@ -495,12 +721,22 @@ export function Field({ field, value, onChange, db, values }) {
       );
       break;
     }
-    case 'checkbox':
-      return (
+    case 'checkbox': {
+      const box = (
         <label className={`check ${field.full ? 'full' : ''}`}>
           <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} /> {field.label}
         </label>
       );
+      // A checkbox with help text keeps the note right under it, in the same grid cell.
+      return field.help ? (
+        <div className="full check-help">
+          {box}
+          <small className="muted">{field.help}</small>
+        </div>
+      ) : (
+        box
+      );
+    }
     case 'radio': {
       const opts = resolveOptions(field, db, values);
       input = (
@@ -581,6 +817,7 @@ export function FormModal({ title, fields, initial = {}, onSave, onClose, submit
       return adjust ? adjust(next, prev) : next;
     });
   const [error, setError] = useState('');
+  const formId = useId();
   const submit = (e) => {
     e.preventDefault();
     const missing = fields.find((f) => f.required && (!f.show || f.show(values)) && (values[f.key] === undefined || values[f.key] === '' || values[f.key] === null));
@@ -590,20 +827,26 @@ export function FormModal({ title, fields, initial = {}, onSave, onClose, submit
     onSave(values);
   };
   return (
-    <Modal title={title} onClose={onClose} wide={wide}>
-      <form onSubmit={submit}>
+    <Modal
+      title={title}
+      onClose={onClose}
+      wide={wide}
+      footer={
+        <>
+          <Btn kind="ghost" onClick={onClose}>
+            Cancel
+          </Btn>
+          <button type="submit" form={formId} className="btn btn-primary">
+            {submitLabel}
+          </button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={submit}>
         {children && children(values, setValues)}
         <FormGrid fields={fields} values={values} setValues={setValues} db={db} />
         {after && after(values, setValues)}
         {error && <p className="form-error">{error}</p>}
-        <div className="modal-foot inline">
-          <Btn kind="ghost" onClick={onClose}>
-            Cancel
-          </Btn>
-          <button type="submit" className="btn btn-primary">
-            {submitLabel}
-          </button>
-        </div>
       </form>
     </Modal>
   );
@@ -678,6 +921,43 @@ export function exportCSV(name, columns, rows) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `${name}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Ask for a reason before an action (sending payroll back, unlocking). onConfirm(text) returns true when it worked, which closes the dialog.
+export function ReasonModal({ title, label, help, confirmText = 'Confirm', danger, onConfirm, onClose }) {
+  const [text, setText] = useState('');
+  const go = () => {
+    if (!text.trim()) return toast('Write the reason first.', 'error');
+    if (onConfirm(text.trim())) onClose();
+  };
+  return (
+    <Modal
+      title={title}
+      onClose={onClose}
+      footer={
+        <>
+          <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn kind={danger ? 'danger' : undefined} onClick={go}>{confirmText}</Btn>
+        </>
+      }
+    >
+      {help && <p className="muted" style={{ marginBottom: 12 }}>{help}</p>}
+      <div className="field">
+        <label htmlFor="reason-text">{label}<span className="req">*</span></label>
+        <textarea id="reason-text" rows={4} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
+      </div>
+    </Modal>
+  );
+}
+
+// Download plain text as a file (the PF ECR upload is a .txt).
+export function exportText(name, text, ext = 'txt') {
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.${ext}`;
   a.click();
   URL.revokeObjectURL(a.href);
 }

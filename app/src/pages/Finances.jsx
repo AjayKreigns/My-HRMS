@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useDB, addItem, update, uid, notify } from '../store.js';
 import { Card, Btn, Badge, DataTable, FormModal, PageHead, KV, Stat, Modal, Empty, NavTabs, toast } from '../ui.jsx';
 import { go } from '../App.jsx';
-import { money, monthLabel, payslipFor, breakupFor, settingsFor, payGroupOf, incomeTax, declarationTotal, fullName, fmtDate, todayISO, ymOf, addMonths, empById } from '../utils.js';
+import TaxStatement from './TaxStatement.jsx';
+import { downloadPayslipPdf } from '../payslipPdf.js';
+import { taxProjection, cycleMonthOf, cycleStartOf, money, monthLabel, payslipFor, breakupFor, settingsFor, payGroupOf, incomeTax, declarationTotal, fullName, fmtDate, todayISO, ymOf, addMonths, empById, loanEmi } from '../utils.js';
 
 const TABS = [
   ['summary', 'Summary'],
@@ -110,8 +112,10 @@ export default function Finances({ user, tab }) {
   const myDecl = db.taxDeclarations.find((d) => d.empId === user.id);
   const regime = myDecl?.regime || user.taxRegime || 'New';
   const annual = b.gross * 12;
-  const taxNew = incomeTax(annual, 'New', myDecl);
-  const taxOld = incomeTax(annual, 'Old', myDecl, b.earnings[0][1] * 12, b.earnings[1][1] * 12);
+  // The same projection as the tax statement, for both regimes, so every figure on this page agrees.
+  const tp = taxProjection(db, user, cycleMonthOf(todayISO(), cycleStartOf(db)));
+  const taxNew = tp.byRegime.New;
+  const taxOld = tp.byRegime.Old;
   const year = new Date().getFullYear();
   const fy = new Date().getMonth() >= 3 ? `${year}-${String(year + 1).slice(2)}` : `${year - 1}-${String(year).slice(2)}`;
   const ytd = runs.filter((r) => r.month >= `${fy.slice(0, 4)}-04`).map((r) => payslipFor(db, user, r.month));
@@ -191,6 +195,7 @@ export default function Finances({ user, tab }) {
 
       {tab === 'tax' && (
         <div className="stack">
+          <TaxStatement db={db} emp={user} />
           <div className="grid g3">
             <Stat label="Estimated taxable income" value={money(regime === 'Old' ? taxOld.taxable : taxNew.taxable)} />
             <Stat label="Tax – new regime" value={money(taxNew.tax)} tone={regime === 'New' ? 'brand' : undefined} sub={regime === 'New' ? 'Selected' : ''} />
@@ -229,7 +234,7 @@ export default function Finances({ user, tab }) {
               { key: 'type', label: 'Type' },
               { key: 'amount', label: 'Amount', render: (l) => money(l.amount) },
               { key: 'tenureMonths', label: 'Tenure', render: (l) => `${l.tenureMonths} months` },
-              { key: 'emi', label: 'EMI', sortable: false, render: (l) => money(l.amount / l.tenureMonths) },
+              { key: 'emi', label: 'EMI', sortable: false, render: (l) => money(loanEmi(l)) },
               { key: 'startMonth', label: 'Deduction from', render: (l) => (l.startMonth ? monthLabel(l.startMonth) : '—') },
               { key: 'status', label: 'Status', render: (l) => <Badge>{l.status}</Badge> },
             ]}
@@ -254,7 +259,7 @@ export default function Finances({ user, tab }) {
       )}
 
       {slip && (
-        <Modal title={`Payslip — ${monthLabel(slip.ym)}`} onClose={() => setSlip(null)} wide footer={<Btn icon="print" onClick={() => window.print()}>Print / save as PDF</Btn>}>
+        <Modal title={`Payslip — ${monthLabel(slip.ym)}`} onClose={() => setSlip(null)} wide footer={<><Btn kind="ghost" icon="download" onClick={() => downloadPayslipPdf(db, slip)} title="Opens with your employee number followed by your date of birth (DDMMYYYY)">PDF (password protected)</Btn><Btn icon="print" onClick={() => window.print()}>Print</Btn></>}>
           <PayslipView slip={slip} company={db.company} />
         </Modal>
       )}

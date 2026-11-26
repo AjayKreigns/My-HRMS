@@ -440,7 +440,7 @@ export function AttendanceAdmin({ user }) {
     return out;
   };
   const recs = view !== 'day' ? [] : activeEmployees(db)
-    .filter((e) => e.dateOfJoining <= date)
+    .filter((e) => e.dateOfJoining <= date && e.attendanceExempt !== 'Yes')
     .map((e) => ({ emp: e, rec: attendanceFor(db, e.id, date) }))
     .map((r) => ({ ...r, remark: attendanceRemark(db, r.emp.id, date, r.rec), open: openDays(r.emp.id) }));
   const count = (s) => recs.filter((r) => r.rec.status === s).length;
@@ -450,7 +450,7 @@ export function AttendanceAdmin({ user }) {
   const [cFrom, cTo] = cycleRange(ym, cycleStartOf(db));
   const cEnd = cTo < todayISO() ? cTo : todayISO();
   const monthRows = view !== 'month' ? [] : activeEmployees(db)
-    .filter((e) => e.dateOfJoining <= cEnd)
+    .filter((e) => e.dateOfJoining <= cEnd && e.attendanceExempt !== 'Yes')
     .map((emp) => {
       const o = { present: 0, wfh: 0, leave: 0, late: 0, update: 0, lop: 0, pending: 0 };
       for (let d = cFrom; d <= cEnd; d = addDays(d, 1)) {

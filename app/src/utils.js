@@ -1,4 +1,9 @@
 // Shared helpers: dates, money, payroll maths, attendance and leave calculations.
+import { PF_DEFAULTS, pfPolicy, esiPolicy, pfCeilingOn, pfCeilingForCycle, pfBasisOf, pfOf, esiPeriodOf, esiAmount, ESI_EXCLUDED, ptPolicy, ptStateOf, ptMonthly, lwfPolicy, lwfDue } from './statutory.js';
+
+// HR's decision on an Absent / Action Required day, and the loss-of-pay days it means.
+export const RESOLUTION_LOP = { Paid: 0, 'Loss of pay': 1, 'Half day loss of pay': 0.5 };
+export const uidLike = (p = 'id') => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 export const pad = (n) => String(n).padStart(2, '0');
 export const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -340,10 +345,10 @@ export function groupFromSettings(s = {}) {
     payDay: s.payDay ?? 'Last working day',
     lockDay: s.lockDay ?? 25,
     pfEnabled: s.pfEnabled !== false,
-    pfCeiling: s.pfCeiling ?? 15000,
+    // No pfCeiling: the wage ceiling follows the statutory rules (Payroll > Settings > PF & ESI). Set one here only to override them.
     esiEnabled: s.esiEnabled !== false,
     ptEnabled: s.ptEnabled !== false,
-    ptAmount: s.ptAmount ?? 208,
+    // No ptAmount: Professional Tax follows the state slabs (Payroll > Settings > PT & LWF). Set one here only for a fixed amount.
     lwfEnabled: !!s.lwfEnabled,
     lwfEmployee: s.lwfEmployee ?? 0,
     lwfEmployer: s.lwfEmployer ?? 0,
@@ -363,12 +368,19 @@ export function salaryBreakup(ctcAnnual, settings, structure) {
     return 0;
   };
   const basic = comps.length ? val(comps[0], 0) : 0;
-  const pfWage = Math.min(basic, Number(s.pfCeiling ?? 15000));
-  const employerPf = s.pfEnabled === false || st.employerPf === false ? 0 : pfWage * 0.12;
+  // Provident fund on this basic: the company's PF rules (settings.pf) with the employee's own choices laid over them.
+  const pol = { ...PF_DEFAULTS, ...(s.pf || {}) };
+  const pfd = s.pfEnabled === false ? null : pfOf(pol, { basic, ceiling: s.pfCeiling ?? pfCeilingOn(pol), basis: s.pfBasis || pol.basis, epsApplies: s.epsApplies !== false });
+  const employerPf = pfd ? pfd.employer : 0;
+  const edli = pfd ? pfd.edli : 0;
+  const admin = pfd ? pfd.admin : 0;
   const gratuity = st.gratuity === false ? 0 : basic * (Number(st.gratuityPct ?? 4.81) / 100);
   const amounts = comps.map((c, i) => (c.type === 'Balance' ? null : i === 0 ? basic : val(c, basic)));
   const fixedSum = amounts.reduce((t, a) => t + (a || 0), 0);
-  const balance = Math.max(monthly - employerPf - gratuity - fixedSum, 0);
+  // The employer's PF share comes out of the CTC unless the pay structure says it is paid on top of it;
+  // EDLI and the administration charge follow the company setting.
+  const inCtc = (st.employerPf !== false ? employerPf : 0) + (pol.chargesInCtc ? edli + admin : 0);
+  const balance = Math.max(monthly - inCtc - gratuity - fixedSum, 0);
   const earnings = comps.map((c, i) => [c.name, amounts[i] === null ? balance : amounts[i]]);
   const hraAt = comps.findIndex((c) => c.role === 'hra');
   return {
@@ -377,9 +389,11 @@ export function salaryBreakup(ctcAnnual, settings, structure) {
     employer: [
       ['Employer PF', employerPf],
       ['Gratuity', gratuity],
+      ['EDLI (employer)', edli],
+      ['EPF admin charges', admin],
     ],
     gross: earnings.reduce((t, [, v]) => t + v, 0),
-    pfWage,
+    pfWage: pfd ? pfd.wage : 0,
     basic,
     hra: hraAt >= 0 ? earnings[hraAt][1] : 0,
   };
@@ -392,18 +406,91 @@ export const defaultOf = (list) => (list || []).find((x) => x.isDefault) || (lis
 export const payGroupOf = (db, emp) => (db.payGroups || []).find((g) => g.id === emp?.payGroupId) || defaultOf(db.payGroups);
 export const structureOf = (db, emp) => {
   const list = db.payStructures || [];
-  return list.find((x) => x.id === emp?.structureId) || list.find((x) => x.id === payGroupOf(db, emp)?.structureId) || defaultOf(list);
+  const st = list.find((x) => x.id === emp?.structureId) || list.find((x) => x.id === payGroupOf(db, emp)?.structureId) || defaultOf(list);
+  // Gratuity switched off for the company (Payroll > Settings > Gratuity) means none for anyone.
+  if (st && gratuityPolicy(db).enabled === false) return { ...st, gratuity: false };
+  // Only the employees HR picked (profile > Statutory > Gratuity applies = Yes).
+  if (st && gratuityPolicy(db).eligibility === 'selected') return { ...st, gratuity: emp?.gratuityApplies === 'Yes' };
+  // The employee's own gratuity choice (profile > Statutory) beats the structure; blank follows it.
+  if (st && (emp?.gratuityApplies === 'Yes' || emp?.gratuityApplies === 'No')) return { ...st, gratuity: emp.gratuityApplies === 'Yes' };
+  return st;
 };
+// Gratuity paid on exit. The company can change any of these in Payroll > Settings > Gratuity;
+// until then the Payment of Gratuity Act formula applies.
+export const GRATUITY_DEFAULTS = {
+  enabled: true, // off means the company has no gratuity: nothing in the CTC and nothing paid on exit
+  eligibility: 'all', // 'all': everyone with the years of service; 'selected': only employees whose profile says Yes
+  daysPerYear: 15, // days of wages for each completed year
+  monthDays: 26, // a month's wages are taken as this many days
+  minYears: 5, // service needed before it is payable
+  minYearsFixedTerm: 1, // the same for fixed-term (Contract) staff
+  roundMonths: 6, // a part-year of at least this many months counts as a full year (12 = completed years only)
+  cap: 2000000, // most that can be paid; 0 means no limit
+};
+export const gratuityPolicy = (db) => ({ ...GRATUITY_DEFAULTS, ...(db?.payrollSettings?.gratuityPolicy || {}) });
+// What is payable for a monthly basic and years of service (fractions allowed).
+export function gratuityPayable(policy, basic, years, workerType) {
+  const p = { ...GRATUITY_DEFAULTS, ...(policy || {}) };
+  const minYears = workerType === 'Contract' ? p.minYearsFixedTerm : p.minYears;
+  if (p.enabled === false || !(years >= minYears)) return { amount: 0, minYears, countedYears: 0, capped: false };
+  const whole = Math.floor(years);
+  const countedYears = whole + ((years - whole) * 12 >= p.roundMonths - 1e-9 ? 1 : 0);
+  const raw = (p.daysPerYear / p.monthDays) * basic * countedYears;
+  const capped = p.cap > 0 && raw > p.cap;
+  return { amount: capped ? p.cap : raw, minYears, countedYears, capped };
+}
+// Whether gratuity applies to this employee at all (it is part of their CTC and payable on exit).
+export const gratuityApplies = (db, emp) => structureOf(db, emp)?.gratuity !== false;
 // Company payroll settings with the pay group's statutory switches laid over them.
-export function settingsFor(db, emp) {
+// Give the payroll month (ym) to get the PF wage ceiling for that pay cycle; without it, the ceiling in force today.
+export function settingsFor(db, emp, ym) {
   const g = payGroupOf(db, emp) || {};
   const over = {};
   GROUP_KEYS.forEach((k) => {
     if (g[k] !== undefined && g[k] !== '') over[k] = g[k];
   });
-  return { ...db.payrollSettings, ...over };
+  // The employee's own PF choice (profile > Statutory) beats the pay group; blank follows the group.
+  if (emp?.pfApplies === 'No') over.pfEnabled = false;
+  else if (emp?.pfApplies === 'Yes') over.pfEnabled = true;
+  const pf = pfPolicy(db);
+  const esi = esiPolicy(db);
+  const merged = { ...db.payrollSettings, ...over };
+  // The ceiling follows the dated statutory rules unless the pay group sets one of its own.
+  const [cf, ct] = ym ? cycleRange(ym, merged.cycleStartDay) : [];
+  const own = Number(g.pfCeiling) > 0 ? Number(g.pfCeiling) : 0;
+  return {
+    ...merged,
+    pf,
+    esi,
+    pfCeiling: own || (ym ? pfCeilingForCycle(pf, cf, ct) : pfCeilingOn(pf)),
+    pfBasis: pfBasisOf(pf, emp),
+    epsApplies: emp?.epsApplies !== 'No',
+    // ESI is off for everyone when the company switches it off; the pay group can switch it off for its own people.
+    esiEnabled: esi.enabled !== false && merged.esiEnabled !== false,
+  };
 }
-export const breakupFor = (db, emp) => salaryBreakup(emp?.ctc, settingsFor(db, emp), structureOf(db, emp));
+export const breakupFor = (db, emp, ym) => salaryBreakup(emp?.ctc, settingsFor(db, emp, ym), structureOf(db, emp));
+
+// Monthly pay rate on a past or future date, from the approved salary revisions (the employee record holds today's CTC).
+function ctcAsOf(db, emp, date) {
+  const revs = (db.promotions || []).filter((p) => p.empId === emp.id && p.status === 'Approved' && p.effectiveFrom).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  const past = revs.filter((p) => p.effectiveFrom <= date).pop();
+  if (past && Number(past.newCtc) > 0) return Number(past.newCtc);
+  const next = revs.find((p) => p.effectiveFrom > date);
+  return next && Number(next.oldCtc) > 0 ? Number(next.oldCtc) : Number(emp.ctc);
+}
+// Whether the employee is covered by ESI for a payroll month. Coverage is decided on the wages in the first month
+// of the contribution period they are working in (or the month they joined, if later) and then holds for the whole period.
+export function esiCovered(db, emp, ym) {
+  const s = settingsFor(db, emp, ym);
+  if (s.esiEnabled === false) return { covered: false, period: null, wage: 0 };
+  const sd = cycleStartOf(db);
+  const period = esiPeriodOf(s.esi, ym);
+  const joined = cycleMonthOf(emp.dateOfJoining || `${ym}-01`, sd);
+  const decidedIn = joined > period.start ? joined : period.start;
+  const wage = salaryBreakup(ctcAsOf(db, emp, cycleRange(decidedIn, sd)[1]), settingsFor(db, emp, decidedIn), structureOf(db, emp)).gross;
+  return { covered: wage <= Number(s.esi.grossLimit), period, wage, decidedIn };
+}
 
 const NEW_SLABS = [[400000, 0], [800000, 0.05], [1200000, 0.1], [1600000, 0.15], [2000000, 0.2], [2400000, 0.25], [Infinity, 0.3]];
 const OLD_SLABS = [[250000, 0], [500000, 0.05], [1000000, 0.2], [Infinity, 0.3]];
@@ -427,21 +514,136 @@ export function declarationTotal(decl) {
   return { c80, d80, other, hraRent: Number(it.rentMonthly || 0) * 12 };
 }
 
-export function incomeTax(annualGross, regime = 'New', decl, basicAnnual = 0, hraAnnual = 0) {
-  let taxable;
+// Tax on one year's pay. Section 87A rebate with marginal relief: just above the limit the tax can never be more than
+// the income above it. Surcharge on very high incomes also has marginal relief. 4% cess. Taxable income and the final tax
+// are rounded to the nearest ten rupees, as the Act says (sections 288A and 288B).
+const SURCHARGE_NEW = [[5000000, 0], [10000000, 0.1], [20000000, 0.15], [Infinity, 0.25]];
+const SURCHARGE_OLD = [[5000000, 0], [10000000, 0.1], [20000000, 0.15], [50000000, 0.25], [Infinity, 0.37]];
+const round10 = (n) => Math.round(n / 10) * 10;
+function taxOn(taxable, slabs, rebateLimit, surcharges) {
+  const base = (x) => (x <= rebateLimit ? 0 : Math.min(slabTax(x, slabs), x - rebateLimit));
+  const rateAt = (x) => surcharges.find(([cap]) => x <= cap)[1];
+  let tax = base(taxable);
+  let surcharge = tax * rateAt(taxable);
+  // Marginal relief: over a surcharge threshold, tax plus surcharge cannot exceed the tax at the threshold plus the income above it.
+  const crossed = surcharges.filter(([cap], i) => i < surcharges.length - 1 && taxable > cap).pop();
+  if (crossed && surcharge > 0) {
+    const [threshold, prevRate] = crossed;
+    const atThreshold = base(threshold) * (1 + prevRate);
+    surcharge = Math.max(Math.min(tax + surcharge, atThreshold + (taxable - threshold)) - tax, 0);
+  }
+  const cess = (tax + surcharge) * 0.04;
+  return { tax: round10(tax + surcharge + cess), surcharge, cess };
+}
+// opts: months (months of pay in the year, default 12), ptAnnual (Professional Tax for the year, a deduction in the old
+// regime), pfAnnual (the employee's own PF for the year, counted under 80C in the old regime).
+export function incomeTax(annualGross, regime = 'New', decl, basicAnnual = 0, hraAnnual = 0, opts = {}) {
+  const months = opts.months ?? 12;
   if (regime === 'Old') {
     const d = declarationTotal(decl);
-    const hraEx = d.hraRent ? Math.max(Math.min(hraAnnual, d.hraRent - basicAnnual * 0.1, basicAnnual * 0.4), 0) : 0;
-    taxable = Math.max(annualGross - 50000 - 2400 - hraEx - d.c80 - d.d80 - d.other, 0);
-    let tax = slabTax(taxable, OLD_SLABS);
-    if (taxable <= 500000) tax = 0;
-    return { taxable, tax: tax * 1.04 };
+    // House rent allowance: the least of the HRA received, rent over 10% of basic, and 50% of basic (metro city).
+    const rent = (d.hraRent / 12) * months;
+    const hraEx = rent ? Math.max(Math.min(hraAnnual, rent - basicAnnual * 0.1, basicAnnual * 0.5), 0) : 0;
+    const c80 = Math.min(d.c80 + (opts.pfAnnual || 0), 150000);
+    const taxable = round10(Math.max(annualGross - 50000 - (opts.ptAnnual ?? 2400) - hraEx - c80 - d.d80 - d.other, 0));
+    return { taxable, ...taxOn(taxable, OLD_SLABS, 500000, SURCHARGE_OLD) };
   }
-  taxable = Math.max(annualGross - 75000, 0);
-  let tax = slabTax(taxable, NEW_SLABS);
-  if (taxable <= 1200000) tax = 0;
-  return { taxable, tax: tax * 1.04 };
+  const taxable = round10(Math.max(annualGross - 75000, 0));
+  return { taxable, ...taxOn(taxable, NEW_SLABS, 1200000, SURCHARGE_NEW) };
 }
+
+// ---- tax for the year, projected from pay so far (financial year April to March) ----
+export const fyOf = (ym) => (Number(ym.slice(5)) >= 4 ? Number(ym.slice(0, 4)) : Number(ym.slice(0, 4)) - 1);
+const lineOf = (list, prefix) => (list.find(([k]) => k.startsWith(prefix)) || [0, 0])[1];
+// What counts as pay for income tax in a payslip: everything except reimbursements.
+const taxableOfSlip = (slip) => slip.earnings.reduce((t, [k, v]) => t + (k.startsWith('Reimbursement') ? 0 : v), 0);
+// Tax for the financial year is worked out from the pay already given (locked months), this month's pay and the
+// months still to come. What was deducted so far is taken off, and the rest is spread over the months left, so the
+// last month (March) settles whatever the year turned out to be.
+//   current: { taxable, pfEmployee } for this month, when payslipFor has already worked them out.
+export function taxProjection(db, emp, ym, current = {}) {
+  const sd = cycleStartOf(db);
+  const fy = fyOf(ym);
+  const first = `${fy}-04`;
+  const last = `${fy + 1}-03`;
+  const joined = cycleMonthOf(emp.dateOfJoining || `${first}-01`, sd);
+  const exit = (db.exits || []).find((x) => x.empId === emp.id && x.status !== 'Withdrawn');
+  const left = exit ? cycleMonthOf(exit.lastWorkingDay, sd) : last;
+  const start = joined > first ? joined : first;
+  const end = left < last ? left : last;
+  const months = [];
+  for (let m = start; m <= end; m = addMonths(m, 1)) months.push(m);
+  const decl = (db.taxDeclarations || []).find((d) => d.empId === emp.id && d.fy === `${fy}-${String(fy + 1).slice(2)}`) || (db.taxDeclarations || []).find((d) => d.empId === emp.id);
+  const regime = decl?.regime || emp.taxRegime || 'New';
+  const b = breakupFor(db, emp, ym);
+  const s = settingsFor(db, emp, ym);
+  const pol = ptPolicy(db);
+  const pfMonth = s.pfEnabled === false ? 0 : Math.round(pfOf(s.pf, { basic: b.basic, ceiling: s.pfCeiling, basis: s.pfBasis, epsApplies: s.epsApplies }).employee);
+  const done = months.filter((m) => m < ym);
+  const rest = months.filter((m) => m >= ym);
+  let gross = Number(emp.prevIncome) || 0;
+  let paid = Number(emp.prevTds) || 0;
+  let pf = 0;
+  let assumed = 0;
+  done.forEach((m) => {
+    const snap = frozenRun(db, m)?.snapshot?.[emp.id];
+    if (snap) {
+      gross += taxableOfSlip(snap);
+      paid += lineOf(snap.deductions, 'Income Tax');
+      pf += lineOf(snap.deductions, 'Provident');
+    } else {
+      // No locked payslip for that month: assume the usual pay and that tax was deducted evenly.
+      gross += b.gross;
+      pf += pfMonth;
+      assumed++;
+    }
+  });
+  const ahead = Math.max(rest.length - 1, 0);
+  if (rest.length) {
+    gross += (current.taxable ?? b.gross) + ahead * b.gross;
+    pf += (current.pfEmployee ?? pfMonth) + ahead * pfMonth;
+  }
+  const n = months.length || 1;
+  const ptMonth = s.ptEnabled === false ? 0 : ptMonthly(pol, ptStateOf(pol, emp), b.gross, ym);
+  const opts = { months: n, ptAnnual: ptMonth * n, pfAnnual: pf };
+  // Both regimes on the same pay, so an employee can compare them; the one they are in is the one used.
+  const byRegime = { New: incomeTax(gross, 'New', decl, b.basic * n, b.hra * n, opts), Old: incomeTax(gross, 'Old', decl, b.basic * n, b.hra * n, opts) };
+  const tax = byRegime[regime] || byRegime.New;
+  // Months with no locked payslip are assumed to have had tax deducted evenly on normal pay (not on this month's bonus).
+  const normal = incomeTax((Number(emp.prevIncome) || 0) + n * b.gross, regime, decl, b.basic * n, b.hra * n, { months: n, ptAnnual: ptMonth * n, pfAnnual: pfMonth * n });
+  paid += (normal.tax * assumed) / n;
+  const left_ = Math.max(tax.tax - paid, 0);
+  const monthly = rest.length ? left_ / rest.length : 0;
+  return { regime, fy, months, monthsDone: done.length, monthsLeft: rest.length, grossYear: gross, byRegime, taxable: tax.taxable, annualTax: tax.tax, surcharge: tax.surcharge, cess: tax.cess, paid, remaining: left_, monthly, prevIncome: Number(emp.prevIncome) || 0, prevTds: Number(emp.prevTds) || 0, declared: !!decl };
+}
+
+// ---- loans: instalment, balance and what is still owed ----
+export const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+// Equal monthly instalment. With an interest rate it is a reducing-balance loan; with none, the plain split.
+export function loanEmi(l) {
+  const n = Math.max(Number(l.tenureMonths) || 1, 1);
+  const p = Number(l.amount) || 0;
+  const r = (Number(l.interestRate) || 0) / 1200;
+  if (!(r > 0)) return p / n;
+  const f = Math.pow(1 + r, n);
+  return (p * r * f) / (f - 1);
+}
+// What is still owed after k instalments have been paid.
+export function loanBalanceAfter(l, k) {
+  const n = Math.max(Number(l.tenureMonths) || 1, 1);
+  const p = Number(l.amount) || 0;
+  const paid = Math.min(Math.max(Math.floor(k), 0), n);
+  if (paid >= n) return 0;
+  const r = (Number(l.interestRate) || 0) / 1200;
+  if (!(r > 0)) return p - (p / n) * paid;
+  const f = Math.pow(1 + r, paid);
+  return p * f - (loanEmi(l) * (f - 1)) / r;
+}
+// Instalments already deducted before payroll month ym.
+export const loanPaidBefore = (l, ym) => (l.startMonth && l.startMonth < ym ? Math.min(Number(l.tenureMonths) || 1, monthsBetween(l.startMonth, ym)) : 0);
+export const loanOutstanding = (l, ym) => loanBalanceAfter(l, loanPaidBefore(l, ym));
+// True when payroll month ym deducts an instalment of this loan.
+export const loanDueIn = (l, ym) => l.status === 'Active' && l.startMonth <= ym && addMonths(l.startMonth, (Number(l.tenureMonths) || 1) - 1) >= ym;
 
 // One employee's pay for one month, including loss-of-pay days and loan EMIs.
 // Pay cycle for a payroll month: with a start day of 26, November runs 26 Oct – 25 Nov.
@@ -480,9 +682,13 @@ const frozenRun = (db, ym) => {
 export const payrollPeople = (db, ym, live = false) => {
   const run = live ? null : frozenRun(db, ym);
   if (run) return db.employees.filter((e) => run.snapshot[e.id]);
-  const end = cycleRange(ym, db.payrollSettings.cycleStartDay)[1];
-  return db.employees.filter((e) => e.status !== 'Exited' && e.status !== 'Pre-boarding' && e.dateOfJoining <= end);
+  const [start, end] = cycleRange(ym, db.payrollSettings.cycleStartDay);
+  // Someone settled and marked Exited is still paid for the cycle their last working day falls in.
+  const leftEarlier = (e) => e.status === 'Exited' && !(db.exits || []).some((x) => x.empId === e.id && x.status === 'Settled' && x.lastWorkingDay >= start);
+  return db.employees.filter((e) => e.status !== 'Pre-boarding' && !leftEarlier(e) && e.dateOfJoining <= end);
 };
+// Pay for these kinds is taxed in the month it is paid (Reimbursement is not taxable).
+export const TAXABLE_ONE_OFF = ['Bonus', 'Incentive', 'Overtime', 'Arrears'];
 // The numbers to store when payroll is locked: every payslip, without the employee record.
 export function snapshotPayroll(db, ym) {
   const out = {};
@@ -506,7 +712,7 @@ export function payslipFor(db, emp, ym, live = false) {
     const snap = frozenRun(db, ym)?.snapshot?.[emp.id];
     if (snap) return { emp, ...snap };
   }
-  const s = settingsFor(db, emp);
+  const s = settingsFor(db, emp, ym);
   const group = payGroupOf(db, emp);
   const structure = structureOf(db, emp);
   const b = salaryBreakup(emp.ctc, s, structure);
@@ -525,6 +731,8 @@ export function payslipFor(db, emp, ym, live = false) {
     });
   const extra = (db.payrollAdjustments || []).filter((a) => a.empId === emp.id && a.month === ym);
   lop += extra.filter((a) => a.kind === 'LOP days').reduce((t, a) => t + Number(a.amount || 0), 0);
+  // Days HR decided were loss of pay (Attendance exceptions). Exception employees are exempt from attendance.
+  if (emp.attendanceExempt !== 'Yes') (db.attendanceResolutions || []).filter((r) => r.empId === emp.id && r.date >= cf && r.date <= ct).forEach((r) => (lop += RESOLUTION_LOP[r.resolution] || 0));
   // Joiners and leavers are paid only for the days they were employed in the cycle.
   const gap = (a, b) => Math.max(0, Math.round((parseISO(b) - parseISO(a)) / 86400000));
   if (emp.dateOfJoining > cf) lop += gap(cf, emp.dateOfJoining);
@@ -536,25 +744,47 @@ export function payslipFor(db, emp, ym, live = false) {
   extra.filter((a) => a.kind !== 'Deduction' && a.kind !== 'LOP days').forEach((a) => earnings.push([a.kind + (a.note ? ` (${a.note})` : ''), Number(a.amount)]));
   const gross = earnings.reduce((t, [, v]) => t + v, 0);
   const basic = earnings[0][1];
-  const decl = db.taxDeclarations.find((d) => d.empId === emp.id);
-  const regime = decl?.regime || emp.taxRegime || 'New';
-  const tax = incomeTax(b.gross * 12, regime, decl, b.basic * 12, b.hra * 12);
+  // Income tax: the year's tax is projected from pay so far plus this month and the months left (taxProjection).
+  // A bonus or arrears raises the projection, so its tax is spread over the months that remain.
+  const taxableNow = earnings.reduce((t, [k, v]) => t + (k.startsWith('Reimbursement') ? 0 : v), 0);
+  const oneOff = extra.filter((a) => TAXABLE_ONE_OFF.includes(a.kind)).reduce((t, a) => t + Number(a.amount || 0), 0);
+  const oneOffTax = 0;
   const ov = (db.payrollOverrides || []).find((o) => o.empId === emp.id && o.month === ym) || {};
   const pick = (k, v) => (ov[k] === '' || ov[k] === undefined || ov[k] === null ? v : Number(ov[k]));
   const deductions = [];
-  if (s.pfEnabled !== false) deductions.push(['Provident Fund (Employee)', Math.min(basic, Number(s.pfCeiling ?? 15000)) * 0.12]);
-  const pt = pick('pt', s.ptEnabled !== false && gross > 15000 ? Number(s.ptAmount ?? 208) : 0);
+  // Provident fund on the basic actually earned, so loss of pay lowers the employee's and the employer's share alike.
+  // Each amount is rounded to the rupee, as the ECR is.
+  // Arrears from a back-dated revision carry their own basic, which PF is also due on.
+  const arrearsBasic = extra.reduce((t, a) => t + Number(a.pfBasis || a.pfBasic || 0), 0);
+  const pfRaw = s.pfEnabled === false ? null : pfOf(s.pf, { basic: basic + arrearsBasic, ceiling: s.pfCeiling, basis: s.pfBasis, epsApplies: s.epsApplies });
+  const R = Math.round;
+  const pf = pfRaw && { ceiling: pfRaw.ceiling, wage: R(pfRaw.wage), epsWage: R(pfRaw.epsWage), edliWage: R(pfRaw.edliWage), employee: R(pfRaw.employee), employer: R(pfRaw.employer), eps: R(pfRaw.eps), epf: R(pfRaw.employer) - R(pfRaw.eps), edli: R(pfRaw.edli), admin: pfRaw.admin };
+  if (pf) deductions.push(['Provident Fund (Employee)', pf.employee]);
+  const employer = b.employer.map(([k, v]) => (k === 'Employer PF' ? [k, pf ? pf.employer : 0] : k === 'EDLI (employer)' ? [k, pf ? pf.edli : 0] : k === 'EPF admin charges' ? [k, pf ? pf.admin : 0] : [k, v]));
+  // Professional Tax: a fixed amount if the pay group sets one, otherwise the state's slab on half-yearly income, taken monthly.
+  const ptp = ptPolicy(db);
+  const ptSlab = ptMonthly(ptp, ptStateOf(ptp, emp), b.gross, ym);
+  const pt = pick('pt', s.ptEnabled === false ? 0 : Number(s.ptAmount) > 0 ? Number(s.ptAmount) : ptSlab);
   if (pt) deductions.push(['Professional Tax', pt]);
-  const esi = pick('esi', s.esiEnabled !== false && gross <= 21000 ? gross * 0.0075 : 0);
+  // ESI: wages exclude overtime and similar; coverage follows the contribution period (see esiCovered).
+  const cover = esiCovered(db, emp, ym);
+  const esiWages = Math.max(earnings.reduce((t, [k, v], i) => t + (i >= b.earnings.length && ESI_EXCLUDED.some((x) => k.startsWith(x)) ? 0 : v), 0), 0);
+  const esiEmployee = cover.covered ? esiAmount(esiWages, s.esi.employeeRate) : 0;
+  const esiEmployer = cover.covered ? esiAmount(esiWages, s.esi.employerRate) : 0;
+  const esi = pick('esi', esiEmployee);
   if (esi) deductions.push(['ESI (Employee)', esi]);
-  const lwf = pick('lwf', s.lwfEnabled ? Number(s.lwfEmployee ?? 0) : 0);
+  if (esiEmployer) employer.push(['Employer ESI', esiEmployer]);
+  // Labour Welfare Fund is taken only in its due months (yearly or half-yearly), not every month.
+  const lwfNow = s.lwfEnabled && lwfDue(lwfPolicy(db), ym);
+  const lwf = pick('lwf', lwfNow ? Number(s.lwfEmployee ?? 0) : 0);
   if (lwf) deductions.push(['Labour Welfare Fund', lwf]);
-  deductions.push(['Income Tax (TDS)', pick('tds', tax.tax / 12)]);
-  db.loans
-    .filter((l) => l.empId === emp.id && l.status === 'Active' && l.startMonth <= ym && addMonths(l.startMonth, Number(l.tenureMonths) - 1) >= ym)
-    .forEach((l) => deductions.push([`${l.type} EMI`, Number(l.amount) / Number(l.tenureMonths || 1)]));
+  if (lwfNow && Number(s.lwfEmployer) > 0) employer.push(['Employer LWF', Number(s.lwfEmployer)]);
+  const tax = taxProjection(db, emp, ym, { taxable: taxableNow, pfEmployee: pf ? pf.employee : 0 });
+  const regime = tax.regime;
+  deductions.push(['Income Tax (TDS)', pick('tds', Math.round(tax.monthly))]);
+  db.loans.filter((l) => l.empId === emp.id && loanDueIn(l, ym)).forEach((l) => deductions.push([`${l.type} EMI`, loanEmi(l)]));
   extra.filter((a) => a.kind === 'Deduction').forEach((a) => deductions.push([`Other deduction${a.note ? ` (${a.note})` : ''}`, Number(a.amount)]));
   const totalDed = deductions.reduce((t, [, v]) => t + v, 0);
   const onHold = (db.payrollHolds || []).some((h) => h.empId === emp.id && h.month === ym);
-  return { emp, ym, dim, lop, paidDays: dim - lop, earnings, deductions, gross, totalDed, net: gross - totalDed, employer: b.employer, regime, tax, onHold, payGroup: group?.name || '', payGroupId: group?.id || '', structure: structure?.name || '' };
+  return { emp, ym, dim, lop, paidDays: dim - lop, earnings, deductions, gross, totalDed, net: gross - totalDed, employer, pf, tax, esi: { covered: cover.covered, wages: R(esiWages), employee: esi, employer: esiEmployer, period: cover.period }, regime, tax, oneOffTax, onHold, payGroup: group?.name || '', payGroupId: group?.id || '', structure: structure?.name || '' };
 }

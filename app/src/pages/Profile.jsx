@@ -3,6 +3,8 @@ import { useDB, update, uid } from '../store.js';
 import { Card, Btn, Badge, Tabs, KV, FormModal, Avatar, EmpChip, DataTable, Empty, toast, confirmAction, Icon } from '../ui.jsx';
 import { go } from '../App.jsx';
 import { empById, fullName, fmtDate, money, breakupFor, parseISO } from '../utils.js';
+import { ptPolicy } from '../statutory.js';
+import TaxStatement from './TaxStatement.jsx';
 
 const opt = (arr) => arr;
 export const PRIMARY_FIELDS = [
@@ -67,6 +69,7 @@ export const timeFields = (db) => [
   { key: 'weeklyOff', label: 'Weekly off', type: 'select', options: ['Saturday & Sunday', 'Sunday', 'Alternate Saturdays & Sunday', 'Friday'], default: 'Saturday & Sunday' },
   { key: 'leavePlan', label: 'Leave plan', type: 'select', options: ['Standard Leave Plan', 'Intern Leave Plan', 'Site Leave Plan'], default: 'Standard Leave Plan' },
   { key: 'holidayCalendar', label: 'Holiday calendar', type: 'select', options: ['India - Tamil Nadu', 'India - Maharashtra', 'Client site'], default: 'India - Tamil Nadu' },
+  { key: 'attendanceExempt', label: 'Exception employee', type: 'select', options: ['No', 'Yes'], default: 'No', help: 'Yes for people such as the MD or CEO who come in only now and then. They are exempt from attendance: never marked absent, and nothing is cut from their pay for it.' },
   { key: 'attendanceNumber', label: 'Attendance number' },
   { key: 'attendanceScheme', label: 'Attendance capture', type: 'select', options: ['Web clock-in', 'Biometric', 'Web + Mobile (Remote)'], default: 'Web clock-in' },
   { key: 'expensePolicy', label: 'Expense policy', type: 'select', options: ['Standard Expense Policy', 'Site Travel Policy'], default: 'Standard Expense Policy' },
@@ -82,8 +85,15 @@ export const FINANCE_FIELDS = [
   { key: 'bank_accountHolder', label: 'Name on account', section: 'Bank account' },
   { key: 'bank_branch', label: 'Branch', section: 'Bank account' },
   { key: 'uan', label: 'UAN', section: 'Statutory' },
+  { key: 'pfApplies', label: 'Availing Provident Fund', type: 'select', options: ['Yes', 'No'], placeholder: 'Same as pay group', section: 'Statutory', help: 'Choose No if this employee has opted out of PF: no PF is deducted and there is no employer PF, EDLI or administration charge for them. Blank follows the pay group.' },
+  { key: 'pfBasis', label: 'PF is worked out on', type: 'select', options: ['Capped at ceiling', 'Actual basic'], placeholder: 'Same as company setting', section: 'Statutory', help: 'Capped at ceiling: 12% of basic up to the PF wage ceiling. Actual basic: 12% of the full basic. Blank follows Payroll > Settings > PF & ESI.' },
+  { key: 'epsApplies', label: 'Pension (EPS) share applies', type: 'select', options: ['Yes', 'No'], placeholder: 'Yes', section: 'Statutory', help: 'Choose No for a member who is not eligible for the pension fund: the whole employer share goes to EPF and nothing is shown under EPS in the ECR.' },
+  { key: 'gratuityApplies', label: 'Gratuity applies', type: 'select', options: ['Yes', 'No'], placeholder: 'Same as pay structure', section: 'Statutory', help: 'Yes gives this employee gratuity, No leaves it out of the CTC and pays nothing on exit. Blank follows the pay structure, or means no gratuity when HR has chosen to give it only to selected employees (Payroll > Settings > Gratuity).' },
   { key: 'pfNumber', label: 'PF number', section: 'Statutory' },
   { key: 'esiNumber', label: 'ESI number', section: 'Statutory' },
+  { key: 'workState', label: 'Work state (for Professional Tax)', type: 'select', options: (db) => Object.keys(ptPolicy(db).states), placeholder: 'Company default', section: 'Statutory', help: 'Leave blank for the company’s own state. Only needed for someone who works in another state.' },
+  { key: 'prevIncome', label: 'Income from previous employer this year (₹)', type: 'number', section: 'Income tax', help: 'Optional. For someone who joined this financial year: salary the previous employer paid, so the tax here is worked out on the whole year.' },
+  { key: 'prevTds', label: 'Tax deducted by previous employer (₹)', type: 'number', section: 'Income tax', help: 'Optional. Counted as tax already paid for the year.' },
 ];
 const FAMILY_FIELDS = [
   { key: 'name', label: 'Name', required: true },
@@ -306,6 +316,7 @@ export default function Profile({ user, empId, tab: initialTab }) {
       {tab === 'finances' && (
         <div className="grid g2">
           {section('Bank, salary & statutory details', FINANCE_FIELDS, admin)}
+          {admin && <div className="full-row" style={{ gridColumn: '1 / -1' }}><TaxStatement db={db} emp={emp} /></div>}
           <Card title="Monthly salary structure">
             <ul className="list">
               {b.earnings.map(([k, v]) => (

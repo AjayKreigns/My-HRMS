@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useDB, addItem, patchItem, update, uid, notify, resetDB, getDB } from '../store.js';
-import { Card, Btn, Badge, Tabs, DataTable, FormModal, PageHead, EmpChip, Stat, Crud, KV, Modal, SearchBox, toast, confirmAction, exportCSV, BarChart, FormGrid, Progress } from '../ui.jsx';
+import { Card, Btn, Badge, Tabs, DataTable, FormModal, PageHead, EmpChip, Avatar, Icon, Empty, Stat, Crud, KV, Modal, SearchBox, toast, confirmAction, exportCSV, BarChart, FormGrid, Progress } from '../ui.jsx';
 import { go } from '../App.jsx';
 import { PRIMARY_FIELDS, CONTACT_FIELDS, jobFields, timeFields, FINANCE_FIELDS, ADDRESS_FIELDS, IDENTITY_FIELDS, unflatten } from './Profile.jsx';
 import Payroll from './Payroll.jsx';
 import { LeaveAdmin, AttendanceAdmin, PerformanceAdmin, ExpensesAdmin, ProjectsAdmin, AssetsAdmin, HelpdeskAdmin } from './AdminOps.jsx';
 import Hiring from './Hiring.jsx';
-import { empById, fullName, fmtDate, money, todayISO, addDays, breakupFor, parseISO, ymOf, monthLabel, payslipFor, daysInMonth, cycleMonthOf, cycleStartOf } from '../utils.js';
+import { empById, fullName, fmtDate, money, todayISO, addDays, breakupFor, parseISO, ymOf, monthLabel, payslipFor, daysInMonth, cycleMonthOf, cycleStartOf, cycleRange, cycleDays, loanEmi, loanOutstanding, loanDueIn } from '../utils.js';
 import { leaveBalances } from '../leave.js';
+import { fnfFor } from '../fnf.js';
 import { monthRecords, attendanceStats } from './TimeOff.jsx';
 
 export default function Admin({ user, section }) {
@@ -74,6 +75,7 @@ function Employees({ user }) {
   const [dept, setDept] = useState('');
   const [adding, setAdding] = useState(false);
   const [pw, setPw] = useState(null);
+  const [view, setView] = useState('cards');
   useEffect(() => {
     if (window.location.hash.includes('add')) setAdding(true);
   }, []);
@@ -119,9 +121,42 @@ function Employees({ user }) {
               <option value="">All departments</option>
               {db.departments.map((d) => <option key={d.id}>{d.name}</option>)}
             </select>
+            <Btn kind={view === 'cards' ? 'primary' : 'ghost'} small onClick={() => setView('cards')}>Cards</Btn>
+            <Btn kind={view === 'table' ? 'primary' : 'ghost'} small onClick={() => setView('table')}>Table</Btn>
           </span>
         }
       >
+        {view === 'cards' ? (
+          rows.length === 0 ? (
+            <Empty text="No one matches." />
+          ) : (
+            <div className="dir-grid" style={{ padding: 16 }}>
+              {rows.map((e) => (
+                <div key={e.id} className="dir-card" onClick={() => go(`profile/${e.id}`)}>
+                  <div className="row">
+                    <Avatar emp={e} size={44} />
+                    <div style={{ minWidth: 0 }}>
+                      <strong>{fullName(e)}</strong>
+                      <div className="muted" style={{ fontSize: 12 }}>{e.designation}</div>
+                    </div>
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    <div className="row" style={{ gap: 6 }}><Icon name="briefcase" size={13} /> {e.department} · {e.empNo}</div>
+                    <div className="row" style={{ gap: 6 }}><Icon name="mail" size={13} /> {e.workEmail}</div>
+                    <div className="row" style={{ gap: 6 }}>CTC {money(e.ctc)} · {e.role}</div>
+                  </div>
+                  <div className="row" style={{ justifyContent: 'space-between' }} onClick={(ev) => ev.stopPropagation()}>
+                    <Badge>{e.status}</Badge>
+                    <span className="row-actions">
+                      <Btn kind="ghost" small onClick={() => go(`profile/${e.id}/job`)}>Edit</Btn>
+                      <Btn kind="ghost" small onClick={() => setPw(e)}>Reset password</Btn>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
         <DataTable
           rows={rows}
           pageSize={25}
@@ -141,6 +176,7 @@ function Employees({ user }) {
             },
           ]}
         />
+        )}
       </Card>
       {adding && (
         <FormModal
@@ -184,32 +220,6 @@ function Employees({ user }) {
 }
 
 // ---------- onboarding & exit ----------
-export function fnfFor(db, exit) {
-  const emp = empById(db, exit.empId);
-  const b = breakupFor(db, emp);
-  const basic = b.earnings[0][1];
-  const lwd = exit.lastWorkingDay;
-  const ym = lwd.slice(0, 7);
-  const days = Number(lwd.slice(8));
-  const salary = (b.gross / daysInMonth(ym)) * days;
-  const el = leaveBalances(db, emp.id).find((x) => x.type.encashable === 'Yes');
-  const encash = el ? Math.max(el.available, 0) * (basic / 26) : 0;
-  const years = (parseISO(lwd) - parseISO(emp.dateOfJoining)) / (365.25 * 864e5);
-  const gratuity = years >= 5 ? (15 / 26) * basic * Math.floor(years + (years % 1 >= 0.5 ? 1 : 0)) : 0;
-  const served = Math.round((parseISO(lwd) - parseISO(exit.resignationDate)) / 864e5);
-  const shortfall = Math.max(Number(emp.noticePeriodDays || 0) - served, 0);
-  const recovery = exit.waiveNotice === 'Yes' ? 0 : (b.gross / 30) * shortfall;
-  const loans = db.loans.filter((l) => l.empId === emp.id && l.status === 'Active').reduce((s, l) => s + Number(l.amount) / Number(l.tenureMonths), 0);
-  const items = [
-    ['Salary for final month', salary],
-    [`Leave encashment (${el ? Math.max(el.available, 0) : 0} days)`, encash],
-    [`Gratuity (${years.toFixed(1)} years)`, gratuity],
-    [`Notice shortfall recovery (${shortfall} days)`, -recovery],
-    ['Outstanding loan recovery', -loans],
-  ];
-  return { emp, items, net: items.reduce((s, [, v]) => s + v, 0) };
-}
-
 function Lifecycle({ user }) {
   const db = useDB();
   const [tab, setTab] = useState('onboarding');
@@ -358,6 +368,17 @@ function Lifecycle({ user }) {
       {fnf && (() => {
         const x = db.exits.find((e) => e.id === fnf.id);
         const calc = fnfFor(db, x);
+        const run = db.payrollRuns.find((r) => r.month === calc.ym);
+        const locked = !!run && ['Finalized', 'Paid'].includes(run.status);
+        // Puts the non-salary items into the exit month's payroll as adjustments; safe to repeat.
+        const addToPayroll = () => {
+          update((d) => {
+            d.payrollAdjustments = d.payrollAdjustments.filter((a) => a.exitId !== x.id);
+            calc.post.forEach((a) => d.payrollAdjustments.push({ id: uid('adj'), empId: x.empId, month: calc.ym, exitId: x.id, ...a }));
+            d.exits.find((y) => y.id === x.id).fnfMonth = calc.ym;
+          });
+          toast(`Added to the ${monthLabel(calc.ym)} payroll`);
+        };
         return (
           <Modal
             wide
@@ -367,6 +388,7 @@ function Lifecycle({ user }) {
               x.status !== 'Settled' && (
                 <>
                   <Btn kind="ghost" onClick={() => (patchItem('exits', x.id, { status: 'Withdrawn' }), patchItem('employees', x.empId, { status: 'Active' }), setFnf(null), toast('Exit withdrawn'))}>Withdraw exit</Btn>
+                  <Btn kind="ghost" disabled={locked || !calc.post.length} onClick={addToPayroll}>{x.fnfMonth === calc.ym ? 'Refresh payroll entries' : 'Add to payroll'}</Btn>
                   <Btn
                     onClick={() => {
                       if (!Object.values(x.checklist).every(Boolean) && !confirmAction('Some checklist items are still open. Settle anyway?')) return;
@@ -403,6 +425,8 @@ function Lifecycle({ user }) {
                   ))}
                   <li><strong>Net payable</strong><strong>{money(calc.net)}</strong></li>
                 </ul>
+                {x.fnfMonth && <p className="muted" style={{ marginTop: 8 }}>{x.fnfMonth === calc.ym ? `Added to the ${monthLabel(x.fnfMonth)} payroll as adjustments` : `Entries were added to the ${monthLabel(x.fnfMonth)} payroll; the last working day now falls in ${monthLabel(calc.ym)}, so refresh to move them.`}</p>}
+                {locked && <p className="muted" style={{ marginTop: 8 }}>The {monthLabel(calc.ym)} payroll is locked, so these items cannot be added.</p>}
                 {x.status === 'Settled' && <Badge tone="green">Settled on {fmtDate(x.settledOn)}</Badge>}
               </div>
             </div>

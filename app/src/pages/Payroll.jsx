@@ -3,12 +3,20 @@
 // loans, benefits, reports and settings.
 import { useEffect, useMemo, useState } from 'react';
 import { useDB, addItem, patchItem, removeItem, update, uid, notify } from '../store.js';
-import { Icon, Btn, Badge, DataTable, FormModal, EmpChip, Crud, Modal, FormGrid, Tabs, NavTabs, toast, confirmAction, exportCSV } from '../ui.jsx';
+import { Icon, Btn, Badge, DataTable, FormModal, EmpChip, Crud, Modal, FormGrid, Tabs, NavTabs, toast, confirmAction, exportCSV, exportText, ReasonModal, Dropdown } from '../ui.jsx';
 import { PayslipView, DECLARATION_FIELDS } from './Finances.jsx';
 import { ApproveButtons, empCol } from './AdminOps.jsx';
-import { empById, fullName, fmtDate, money, monthLabel, payslipFor, ymOf, addMonths, addDays, todayISO, declarationTotal, cycleRange, cycleDays, payrollPeople, salaryBreakup, breakupFor, snapshotPayroll, payGroupOf, structureOf, settingsFor, structureFromSettings, groupFromSettings, COMPONENT_TYPES, MONTHS, pad } from '../utils.js';
+import { empById, fullName, fmtDate, money, monthLabel, payslipFor, ymOf, addMonths, addDays, todayISO, declarationTotal, cycleRange, cycleDays, payrollPeople, attendanceFor, taxProjection, fyOf, cycleStartOf, loanEmi, loanOutstanding, loanPaidBefore, salaryBreakup, breakupFor, payGroupOf, structureOf, settingsFor, structureFromSettings, GRATUITY_DEFAULTS, gratuityPolicy, gratuityPayable, groupFromSettings, COMPONENT_TYPES, MONTHS, pad } from '../utils.js';
+import { EXIT_DEFAULTS, exitPolicy, WAGE_DEFAULTS, wagePolicy, wageShare, PF_DEFAULTS, ESI_DEFAULTS, PT_DEFAULTS, LWF_DEFAULTS, pfPolicy, esiPolicy, ptPolicy, lwfPolicy, ptHalfYear, ptMonthly, pfCeilingOn, pfOf, esiPeriodOf } from '../statutory.js';
+import { ecrFile, esiRows, pfTotals, ESI_COLUMNS } from '../statutoryFiles.js';
 import { payrollRegister } from '../register.js';
+import { downloadPayslipPdf } from '../payslipPdf.js';
+import { MAIL_DEFAULTS, mailSettings, smtpReady, queuePayslipMail } from '../payslipMail.js';
+import { exceptionDays, unresolvedDays, setResolution, RESOLUTIONS } from '../attendanceExceptions.js';
+import { approvalPolicy, approverIds, isApprover, canApproveRun, canApproveUnlock, lockRun, submitRun, withdrawRun, approveRun, rejectRun, unlockRun, requestUnlock, approveUnlock, rejectUnlock, cancelUnlock, markInputsChanged, saveApprovalSettings } from '../payrollApproval.js';
 import '../payroll.css';
+import '../payrollx.css';
+import { MonthRail, GateLine, CostTape, SplitBar, ShareTable, VarianceRows, lakh } from './payrollViews.jsx';
 
 // ---------- helpers ----------
 const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'];
@@ -48,8 +56,13 @@ function monthTotals(db, ym) {
   return { people, slips, deposit, deductions, contributions, gross: deposit + deductions, cost: deposit + deductions + contributions };
 }
 
-function payrollErrors(people, slips) {
+function payrollErrors(people, slips, open = []) {
   const out = [];
+  // Absent / Action Required days with no decision from HR yet (see Attendance exceptions).
+  [...new Set(open.map((x) => x.emp.id))].forEach((id) => {
+    const mine = open.filter((x) => x.emp.id === id);
+    out.push({ emp: mine[0].emp, text: `${mine.length} attendance day(s) have no decision yet. Decide them in “Leave, Attendance & Payable Units”.`, fixStep: 'attendance' });
+  });
   people.forEach((e) => {
     if (!Number(e.ctc)) out.push({ emp: e, text: 'No salary has been assigned.' });
     if (!e.bank?.accountNumber || !e.bank?.ifsc) out.push({ emp: e, text: 'Bank account number or IFSC is missing.' });
@@ -75,8 +88,8 @@ function logActivity(d, ym, user, text) {
 // Any change to inputs after processing means payroll must be processed again.
 function inputsChanged(ym, user, text) {
   update((d) => {
-    const r = touchRun(d, ym);
-    if (r.processedAt) r.dirty = true;
+    touchRun(d, ym);
+    markInputsChanged(d, ym, user);
     logActivity(d, ym, user, text);
   });
 }
@@ -149,7 +162,7 @@ export default function Payroll({ user }) {
   else if (mod === 'loans') body = <Loans db={db} user={user} />;
   else if (mod === 'benefits') body = <Benefits db={db} />;
   else if (mod === 'reports') body = <Reports db={db} />;
-  else body = <PayrollSettings db={db} />;
+  else body = <PayrollSettings db={db} user={user} />;
 
   return (
     <div className="pr">
@@ -157,12 +170,7 @@ export default function Payroll({ user }) {
       {subs && <NavTabs className="pr-subs" glideSelector=".pr-body" label={`${mod} sections`} items={subs.map(([k, label]) => ({ key: k, label, href: `#/admin/payroll/${mod}/${k}` }))} active={sub} />}
       <div className="pr-body page-enter">
         <div className="pr-entity">
-          <select value={entity} onChange={(e) => setEntity(e.target.value)} aria-label="Legal entity">
-            {(entities.length ? entities : [db.company.name]).map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-          <Icon name="chevronDown" size={16} />
+          <Dropdown value={entity} onChange={setEntity} options={entities.length ? entities : [db.company.name]} label="Legal entity" />
         </div>
         {body}
       </div>
@@ -194,105 +202,6 @@ function EmployeeList({ title, rows, onClose }) {
 }
 
 // ---------- analytics ----------
-function Donut({ data, size = 180 }) {
-  const total = sumOf(data, (d) => d.value) || 1;
-  const R = 60;
-  const C = 2 * Math.PI * R;
-  let acc = 0;
-  return (
-    <svg viewBox="0 0 200 200" width={size} height={size} className="pr-donut" role="img" aria-label="Distribution chart">
-      <g transform="rotate(-90 100 100)">
-        {data.map((d) => {
-          const len = (d.value / total) * C;
-          const el = (
-            <circle key={d.label} cx="100" cy="100" r={R} fill="none" stroke={d.color} strokeWidth="60" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc}>
-              <title>{`${d.label}: ${inr(d.value)}`}</title>
-            </circle>
-          );
-          acc += len;
-          return el;
-        })}
-      </g>
-    </svg>
-  );
-}
-
-function Distribution({ title, groups }) {
-  const data = groups.map((g, i) => ({ ...g, color: PALETTE[i % PALETTE.length] }));
-  const total = sumOf(data, (d) => d.value);
-  const sorted = [...data].sort((a, b) => b.value - a.value);
-  return (
-    <Panel title={title} className="pr-dist">
-      <div className="pr-dist-body">
-        <div className="pr-dist-chart">
-          <Donut data={data} />
-          <ul className="pr-legend">
-            {data.map((d) => (
-              <li key={d.label}>
-                <i style={{ background: d.color }} />
-                {d.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <dl className="pr-dist-facts">
-          <dt>Total compensation</dt>
-          <dd>{inr(total)}</dd>
-          <dt>Highest compensation</dt>
-          <dd>{sorted[0] ? `${sorted[0].label} (${inr(sorted[0].value)})` : '—'}</dd>
-          <dt>Lowest compensation</dt>
-          <dd>{sorted.length ? `${sorted[sorted.length - 1].label} (${inr(sorted[sorted.length - 1].value)})` : '—'}</dd>
-        </dl>
-      </div>
-    </Panel>
-  );
-}
-
-function PlannedActual({ rows }) {
-  const max = Math.max(1, ...rows.flatMap((r) => [r.planned, r.actual]));
-  const step = max > 4e6 ? 1e6 : max > 1e6 ? 5e5 : 1e5;
-  const top = Math.ceil(max / step) * step;
-  const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
-  const W = 1200;
-  const H = 280;
-  const L = 60;
-  const B = 30;
-  const bw = (W - L - 20) / Math.max(rows.length, 1);
-  const y = (v) => H - B - (v / top) * (H - B - 10);
-  const label = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e5 ? `${+(v / 1e5).toFixed(1)}L` : `${v / 1000}K`);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="pr-bars" role="img" aria-label="Planned versus actual compensation">
-      {ticks.map((t) => (
-        <g key={t}>
-          <line x1={L} x2={W - 10} y1={y(t)} y2={y(t)} className="pr-grid" />
-          <text x={L - 10} y={y(t) + 4} textAnchor="end" className="pr-axis">
-            {label(t)}
-          </text>
-        </g>
-      ))}
-      <text x="14" y={H / 2} transform={`rotate(-90 14 ${H / 2})`} textAnchor="middle" className="pr-axis">
-        Amount (INR)
-      </text>
-      {rows.map((r, i) => {
-        const x = L + i * bw + bw * 0.2;
-        return (
-          <g key={r.ym}>
-            <rect x={x} y={y(r.planned)} width={bw * 0.6} height={H - B - y(r.planned)} className="pr-bar-planned">
-              <title>{`${shortMonth(r.ym)} planned ${inr(r.planned)}`}</title>
-            </rect>
-            <rect x={x + bw * 0.1} y={y(r.actual)} width={bw * 0.4} height={H - B - y(r.actual)} className="pr-bar-actual">
-              <title>{`${shortMonth(r.ym)} actual ${inr(r.actual)} (variance ${inr(r.actual - r.planned)})`}</title>
-            </rect>
-            <text x={x + bw * 0.3} y={H - 10} textAnchor="middle" className="pr-axis">
-              {shortMonth(r.ym)}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
 function Analytics({ db }) {
   const cur = currentPayMonth(db);
   const lastRun = db.payrollRuns.filter(isDone).sort((a, b) => b.month.localeCompare(a.month))[0];
@@ -302,6 +211,7 @@ function Analytics({ db }) {
   const upcoming = db.promotions.filter((p) => p.status === 'Approved' && p.effectiveFrom > today && p.effectiveFrom <= addDays(today, 92));
   const pending = db.promotions.filter((p) => p.status === 'Pending');
   const [list, setList] = useState(null);
+  const [by, setBy] = useState('department');
   const firstFy = fyStart([...db.payrollRuns.map((r) => r.month), cur].sort()[0]);
   const fys = [];
   for (let f = fyStart(cur); f >= firstFy; f = addMonths(f, -12)) fys.push(f);
@@ -309,8 +219,11 @@ function Analytics({ db }) {
   const people = db.employees.filter((e) => e.status !== 'Exited' && e.status !== 'Pre-boarding');
   const group = (key) => {
     const m = new Map();
-    people.forEach((e) => m.set(key(e), (m.get(key(e)) || 0) + Number(e.ctc || 0)));
-    return [...m].map(([label, value]) => ({ label, value }));
+    people.forEach((e) => {
+      const g = m.get(key(e)) || { value: 0, count: 0 };
+      m.set(key(e), { value: g.value + Number(e.ctc || 0), count: g.count + 1 });
+    });
+    return [...m].map(([label, g]) => ({ label, ...g })).sort((x, y) => y.value - x.value);
   };
   const locName = (e) => db.locations.find((l) => l.id === e.locationId)?.name || 'Unassigned';
   const chart = useMemo(
@@ -325,72 +238,88 @@ function Analytics({ db }) {
     [db, fy, cur],
   );
 
-  return (
-    <div className="pr-stack">
-      <div className="pr-cards4">
-        <div className="pr-kpi">
-          <div className="pr-kpi-top">
-            <span>Last Salary Processed</span>
-            <em>{lastRun ? `${monOf(lastRun.month).slice(0, 3)} ${lastRun.month.slice(0, 4)}` : ''}</em>
-          </div>
-          <strong>{lastT ? inr(lastT.cost) : '—'}</strong>
-        </div>
-        <div className="pr-kpi">
-          <div className="pr-kpi-top">
-            <span>Upcoming Salary</span>
-            <em>{`${monOf(cur).slice(0, 3)} ${cur.slice(0, 4)}`}</em>
-          </div>
-          <strong>{inr(upT.cost)}</strong>
-        </div>
-        <div className="pr-kpi">
-          <div className="pr-kpi-top">
-            <span>Upcoming Revisions</span>
-            <em>3 Months</em>
-          </div>
-          <div className="pr-kpi-row">
-            <strong>{upcoming.length}</strong>
-            <button className="pr-link" onClick={() => setList('upcoming')}>
-              View Employees
-            </button>
-          </div>
-        </div>
-        <div className="pr-kpi">
-          <div className="pr-kpi-top">
-            <span>Pending Revisions</span>
-          </div>
-          <div className="pr-kpi-row">
-            <strong>{pending.length}</strong>
-            <button className="pr-link" onClick={() => setList('pending')}>
-              View Employees
-            </button>
-          </div>
-        </div>
-      </div>
+  const split = lastT ? [{ label: 'Take-home pay', value: lastT.deposit, color: 'var(--px-ink)' }, { label: 'Deductions', value: lastT.deductions, color: 'var(--px-steel)' }, { label: 'Employer contributions', value: lastT.contributions, color: 'var(--px-faint)' }] : null;
+  const shown = by === 'department' ? group((e) => e.department) : group(locName);
 
-      <div className="pr-section-head">
-        <h2>Compensation Summary</h2>
-        <select className="pr-select" value={fy} onChange={(e) => setFy(e.target.value)} aria-label="Financial year">
-          {fys.map((f) => (
-            <option key={f} value={f}>
-              {fyName(f)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="pr-cards2">
-        <Distribution title="Compensation Distribution by Department/Sub-Department" groups={group((e) => e.department)} />
-        <Distribution title="Compensation Distribution by Location" groups={group(locName)} />
-      </div>
-      <Panel
-        title="Planned Vs Actual Compensation (Variance) - Past Months"
-        right={
-          <span className="pr-key">
-            <i className="pr-key-planned" /> Planned <i className="pr-key-actual" /> Actual
-          </span>
-        }
-      >
-        {chart.length ? <PlannedActual rows={chart} /> : <p className="pr-muted">No payroll has been completed in this financial year yet.</p>}
-      </Panel>
+  return (
+    <div className="px">
+      <section className="px-lede">
+        <div className="px-lede-main">
+          {lastT ? (
+            <>
+              <h2 className="px-title" style={{ marginBottom: 0 }}>{`Last payroll, ${monthLabel(lastRun.month)}`}</h2>
+              <span className="px-fig">{lakh(lastT.cost)}</span>
+              <p>{`What it cost to pay ${lastT.people.length} people: what they took home, what was deducted for them, and what the company paid on top.`}</p>
+              <SplitBar parts={split} />
+            </>
+          ) : (
+            <>
+              <h2 className="px-title" style={{ marginBottom: 0 }}>No payroll locked yet</h2>
+              <p>Once the first month is locked, its cost and where it went show up here.</p>
+            </>
+          )}
+        </div>
+        <aside className="px-next" aria-label="Coming up">
+          <h3>Coming up</h3>
+          <div className="px-next-row">
+            <div>
+              <span>{`${monthLabel(cur)} payroll, as it stands`}</span>
+              <b className="px-fig">{lakh(upT.cost)}</b>
+            </div>
+          </div>
+          <div className="px-next-row">
+            <div>
+              <span>Revisions starting in the next 3 months</span>
+              <b className="px-fig">{upcoming.length}</b>
+            </div>
+            {upcoming.length > 0 && <button onClick={() => setList('upcoming')}>See who</button>}
+          </div>
+          <div className="px-next-row">
+            <div>
+              <span>Revisions waiting for approval</span>
+              <b className="px-fig">{pending.length}</b>
+            </div>
+            {pending.length > 0 && <button onClick={() => setList('pending')}>See who</button>}
+          </div>
+        </aside>
+      </section>
+
+      <section>
+        <div className="px-section-head">
+          <div>
+            <h2>Who the money goes to</h2>
+            <p>Annual CTC of everyone on payroll today, largest first.</p>
+          </div>
+          <div className="px-seg" role="group" aria-label="Group by">
+            <button aria-pressed={by === 'department'} onClick={() => setBy('department')}>Department</button>
+            <button aria-pressed={by === 'location'} onClick={() => setBy('location')}>Location</button>
+          </div>
+        </div>
+        <ShareTable rows={shown} noun={by === 'department' ? 'Department' : 'Location'} />
+      </section>
+
+      <section>
+        <div className="px-section-head">
+          <div>
+            <h2>Plan against actual</h2>
+            <p>What each month was planned at from everyone’s CTC, against what payroll cost.</p>
+          </div>
+          <div className="row" style={{ gap: 20, alignItems: 'center' }}>
+            <div className="px-var-key">
+              <span className="plan">Planned</span>
+              <span className="act">Paid</span>
+            </div>
+            <select className="px-select" value={fy} onChange={(e) => setFy(e.target.value)} aria-label="Financial year">
+              {fys.map((f) => (
+                <option key={f} value={f}>
+                  {fyName(f)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {chart.length ? <VarianceRows rows={chart} label={(m) => shortMonth(m)} /> : <p className="px-empty">No month of this financial year has been locked yet.</p>}
+      </section>
       {list && <EmployeeList title={list === 'upcoming' ? 'Revisions in the next 3 months' : 'Revisions waiting for approval'} rows={list === 'upcoming' ? upcoming : pending} onClose={() => setList(null)} />}
     </div>
   );
@@ -681,27 +610,17 @@ const HELP = [
   ['How to check if my payroll values are calculated correctly?', 'Use "Review all employees" to open each payslip, or compare this month with the last one under Payroll Analytics → Compare Compensation Cost.'],
 ];
 
-function Delta({ ym, value }) {
-  const neg = value < 0;
-  return (
-    <span className="pr-delta">
-      {monOf(ym)} <b className={neg ? 'pr-neg' : 'pr-pos'}>INR {Math.round(value).toLocaleString('en-IN')}</b>
-      <Icon name={neg ? 'chevronDown' : 'arrowUp'} size={12} className={neg ? 'pr-neg' : 'pr-pos'} />
-    </span>
-  );
-}
-
 function RunPayroll({ user, month }) {
   const db = useDB();
   const s = db.payrollSettings;
   const cur = currentPayMonth(db);
   const ym = /^\d{4}-\d{2}$/.test(month || '') ? month : cur;
   const [fy, setFy] = useState(fyStart(ym));
-  const [open, setOpen] = useState(true);
   const [step, setStep] = useState(null);
   const [modal, setModal] = useState(null);
   const [slip, setSlip] = useState(null);
-  const [panels, setPanels] = useState({ activity: false, help: true });
+  const [panels, setPanels] = useState({ activity: false, help: false });
+  const [reason, setReason] = useState(null);
   useEffect(() => setFy(fyStart(ym)), [ym]);
   const run = db.payrollRuns.find((r) => r.month === ym);
   const t = useMemo(() => monthTotals(db, ym), [db, ym]);
@@ -710,7 +629,8 @@ function RunPayroll({ user, month }) {
   const days = cycleDays(ym, s.cycleStartDay);
   const joiners = t.people.filter((e) => e.dateOfJoining >= from && e.dateOfJoining <= to);
   const exits = db.exits.filter((x) => x.lastWorkingDay >= from && x.lastWorkingDay <= to);
-  const errors = payrollErrors(t.people, t.slips);
+  const undecided = useMemo(() => unresolvedDays(db, ym), [db, ym]);
+  const errors = payrollErrors(t.people, t.slips, undecided);
   const done = isDone(run);
   const upcoming = ym > cur;
   const stepsDone = STEPS.filter((st) => run?.steps?.[st.key]).length;
@@ -733,257 +653,253 @@ function RunPayroll({ user, month }) {
     });
     toast(`Payroll processed for ${payable} employees`);
   };
+  // Run one approval action; show its error, or the message when it worked.
+  const act = (fn, okText) => {
+    let res;
+    update((d) => {
+      res = fn(d);
+    });
+    if (!res.ok) toast(res.error, 'error');
+    else if (okText) toast(okText);
+    return res.ok;
+  };
+  const sep = approvalPolicy(db).separate;
+  const who = (id) => shortName(empById(db, id));
+  const waitingOn = approverIds(db).filter((id) => id !== run?.submittedBy).map(who).join(', ');
   const lock = () => {
     if (!confirmAction(`Lock payroll for ${monthLabel(ym)}? Inputs can't be changed after this.`)) return;
-    update((d) => {
-      const r = Object.assign(touchRun(d, ym), { status: 'Finalized', lockedAt: new Date().toISOString(), lockedBy: user.id });
-      // Freeze the payslips: later changes to salaries, structures or leave rules do not touch this month.
-      r.snapshot = snapshotPayroll(d, ym);
-      logActivity(d, ym, user, 'Locked payroll');
-    });
-    toast(`Payroll locked for ${monthLabel(ym)}`);
+    act((d) => lockRun(d, ym, user), `Payroll locked for ${monthLabel(ym)}`);
+  };
+  const submit = () => {
+    if (!confirmAction(`Submit payroll for ${monthLabel(ym)} for approval?`)) return;
+    act((d) => submitRun(d, ym, user), 'Submitted for approval');
+  };
+  const approve = () => {
+    if (!confirmAction(`Approve and lock payroll for ${monthLabel(ym)}? Inputs can't be changed after this.`)) return;
+    act((d) => approveRun(d, ym, user), `Payroll approved and locked for ${monthLabel(ym)}`);
   };
   const release = () => {
     update((d) => {
       Object.assign(touchRun(d, ym), { status: 'Paid', releasedAt: new Date().toISOString() });
       logActivity(d, ym, user, 'Released payslips');
+      const queued = queuePayslipMail(d, ym, t.slips.filter((x) => !x.onHold).map((x) => x.emp));
+      if (queued) logActivity(d, ym, user, `Put ${queued} payslip email(s) in the outbox`);
     });
     t.slips.filter((x) => !x.onHold).forEach((x) => notify(x.emp.id, `Your payslip for ${monthLabel(ym)} is ready.`, 'finances/payslips'));
     toast('Payslips released');
   };
-  const unlock = () => {
-    if (!confirmAction(`Unlock payroll for ${monthLabel(ym)}?`)) return;
-    update((d) => {
-      const r = Object.assign(touchRun(d, ym), { status: 'Processed', dirty: true });
-      delete r.snapshot; // payslips recalculate from live data again until it is locked
-      logActivity(d, ym, user, 'Unlocked payroll');
-    });
-  };
   const processed = run?.processedAt ? new Date(run.processedAt) : null;
   let footNote;
-  if (done) footNote = `Payroll was locked${run.lockedAt ? ` on ${stamp(run.lockedAt)}` : ''}${run.status === 'Paid' ? ' and payslips were released' : ''}`;
+  if (done) footNote = `Payroll was locked${run.lockedAt ? ` on ${stamp(run.lockedAt)}` : ''}${run.lockedBy ? ` by ${who(run.lockedBy)}` : ''}${run.approvedBy && run.submittedBy ? ` (submitted by ${who(run.submittedBy)}, approved by ${who(run.approvedBy)})` : ''}${run.status === 'Paid' ? ' and payslips were released' : ''}`;
+  else if (run?.status === 'Submitted') footNote = `Submitted for approval on ${stamp(run.submittedAt)} by ${who(run.submittedBy)}`;
   else if (processed) footNote = `Payroll was last processed on ${pad(processed.getDate())} ${MONTHS[processed.getMonth()].slice(0, 3)} at ${stamp(run.processedAt).slice(-8)} by ${shortName(empById(db, run.processedBy))}`;
   else if (upcoming) footNote = `Payroll for ${monthLabel(ym)} opens once ${monthLabel(cur)} is locked`;
   else footNote = 'Payroll has not been processed for this month yet';
 
+  // Where the month stands: five gates, and the one thing to do at the gate it has reached.
+  const processedOk = !!run?.processedAt && !run.dirty;
+  const hasErrors = errors.length > 0;
+  const submitted = run?.status === 'Submitted';
+  const gates = [
+    { key: 'inputs', label: 'Inputs', state: stepsDone === STEPS.length ? 'cleared' : 'open', note: `${stepsDone} of ${STEPS.length} saved` },
+    { key: 'process', label: 'Process', state: upcoming ? 'idle' : processedOk ? 'cleared' : 'active', note: processedOk ? `${run.processedCount ?? payable} employees` : run?.dirty ? 'Inputs changed' : 'Not run yet' },
+    { key: 'review', label: 'Review', state: !processedOk ? 'idle' : hasErrors ? 'blocked' : 'cleared', note: !processedOk ? 'After processing' : hasErrors ? `${errors.length} to fix` : 'Nothing in the way' },
+    { key: 'lock', label: sep ? 'Approve and lock' : 'Lock', state: done ? 'cleared' : submitted ? 'waiting' : processedOk && !hasErrors ? 'active' : 'idle', note: done ? (run.lockedBy ? `By ${who(run.lockedBy)}` : 'Locked') : submitted ? `Waiting for ${waitingOn || 'an approver'}` : sep ? 'Needs a second person' : 'Freezes the payslips' },
+    { key: 'release', label: 'Release', state: run?.status === 'Paid' ? 'cleared' : run?.status === 'Finalized' ? 'active' : 'idle', note: run?.status === 'Paid' ? 'Payslips released' : 'Payslips reach staff' },
+  ];
+  let now;
+  if (upcoming) now = { title: 'Not open yet', text: `${monthLabel(ym)} opens once ${monthLabel(cur)} is locked.` };
+  else if (run?.status === 'Paid') now = { title: 'Done. Payslips are released', text: 'Everyone has been notified, and their payslip emails are in the outbox.' };
+  else if (run?.status === 'Finalized') now = { title: 'Locked. Payslips are not released yet', text: 'Releasing notifies every employee and queues their payslip emails.' };
+  else if (submitted) now = { title: 'Waiting for approval', text: run.submittedBy === user.id ? `Waiting for ${waitingOn || 'an approver'} to approve it. You submitted it, so you cannot.` : `${who(run.submittedBy)} submitted it. ${canApproveRun(db, user, run) ? 'You can approve or send it back.' : `Waiting for ${waitingOn || 'an approver'}.`}` };
+  else if (!processedOk) now = { title: run?.dirty ? 'Inputs changed since the last run' : 'Ready to process', text: run?.dirty ? 'Save the steps you changed, then process again so the payslips match.' : `Processing works out a payslip for each of the ${payable} employees.` };
+  else if (hasErrors) now = { title: errors.length === 1 ? 'One thing is in the way' : `${errors.length} things are in the way`, text: 'The month cannot lock until these are clear. Process again after you fix them.' };
+  else now = { title: sep ? 'Ready to submit for approval' : 'Ready to lock', text: `${sep ? 'A second person approves, and approval locks the month.' : 'Locking freezes every payslip. Inputs cannot change after this.'} Look over every employee’s pay first.` };
+
+  let primaryKey = null;
+  if (!upcoming) {
+    if (done) primaryKey = run.status === 'Finalized' ? (run.unlockRequest && canApproveUnlock(db, user, run) ? 'approveUnlock' : 'release') : null;
+    else if (submitted) primaryKey = canApproveRun(db, user, run) ? 'approve' : null;
+    else if (!processedOk) primaryKey = 'process';
+    else if (hasErrors) primaryKey = 'fix';
+    else primaryKey = sep ? 'submit' : 'lock';
+  }
+  const locked = run?.status === 'Finalized';
+  const acts = [
+    { k: 'process', show: !done, label: processedOk ? 'Process again' : 'Process payroll', onClick: process, disabled: upcoming || submitted },
+    { k: 'fix', show: !done && hasErrors && processedOk, label: errors.length === 1 ? 'Fix the issue' : `Fix ${errors.length} issues`, onClick: () => setModal('errors') },
+    { k: 'lock', show: !done && !sep, label: 'Lock payroll', onClick: lock, disabled: !canLock || upcoming, title: canLock ? '' : 'Process payroll and fix everything in the way first' },
+    { k: 'submit', show: !done && sep && !submitted, label: 'Submit for approval', onClick: submit, disabled: !canLock || upcoming, title: canLock ? '' : 'Process payroll and fix everything in the way first' },
+    { k: 'approve', show: !done && sep && submitted && canApproveRun(db, user, run), label: 'Approve and lock', onClick: approve },
+    { k: 'sendBack', show: !done && sep && submitted && canApproveRun(db, user, run), label: 'Send back', onClick: () => setReason('sendBack') },
+    { k: 'withdraw', show: !done && sep && submitted && (run.submittedBy === user.id || user.role === 'admin'), label: 'Withdraw', onClick: () => act((d) => withdrawRun(d, ym, user), 'Withdrawn from approval') },
+    { k: 'release', show: locked, label: 'Release payslips', onClick: release },
+    { k: 'approveUnlock', show: locked && run.unlockRequest && canApproveUnlock(db, user, run), label: 'Approve unlock', onClick: () => act((d) => approveUnlock(d, ym, user), 'Payroll unlocked') },
+    { k: 'declineUnlock', show: locked && run.unlockRequest && canApproveUnlock(db, user, run), label: 'Decline unlock', onClick: () => setReason('declineUnlock') },
+    { k: 'cancelUnlock', show: locked && run.unlockRequest && run.unlockRequest.by === user.id, label: 'Withdraw unlock request', onClick: () => act((d) => cancelUnlock(d, ym, user), 'Unlock request withdrawn') },
+    { k: 'unlock', show: locked && !run.unlockRequest, label: sep ? 'Request unlock' : 'Unlock payroll', onClick: () => setReason('unlock') },
+    { k: 'review', show: true, label: 'Review all employees', onClick: () => setModal('review'), review: true },
+    { k: 'register', show: true, label: 'Payroll register', onClick: () => setModal('register'), quiet: true },
+  ].filter((a) => a.show);
+  // The main action first, then the review of every employee's pay (the check that matters before locking), then the rest.
+  const ordered = [...acts.filter((a) => a.k === primaryKey), ...acts.filter((a) => a.k === 'review' && a.k !== primaryKey), ...acts.filter((a) => a.k !== primaryKey && a.k !== 'review')];
+  const dm = (d) => `${Number(d.slice(8))} ${MONTHS[Number(d.slice(5, 7)) - 1].slice(0, 3)}`;
+  const [cf0, ct0] = cycleRange(ym, s.cycleStartDay);
+  const joined = joiners.length;
+  const left = exits.length;
+  const againstPrev = shortMonth(prevYm);
+
   return (
-    <div className="pr-stack">
-      <div className="pr-cycles">
-        <button className="pr-cycle-nav" onClick={() => setFy(addMonths(fy, -12))} aria-label="Previous year">
-          <Icon name="chevronLeft" size={16} />
-        </button>
-        <div className="pr-cycle-list">
-          {months.map((m) => {
-            const st = stateOf(m);
-            const [a, b] = cycleRange(m, s.cycleStartDay);
-            return (
-              <button key={m} className={`pr-cycle ${st} ${m === ym ? 'selected' : ''}`} onClick={() => goto(`run/${m}`)}>
-                <span className="pr-cycle-m">{shortMonth(m)}</span>
-                <span className="pr-cycle-r">{`${dayMon(a)}-${dayMon(b)}`}</span>
-                <span className="pr-cycle-s">
-                  {st === 'completed' && <Icon name="check" size={11} />}
-                  {st === 'current' && <Icon name="refresh" size={11} />}
-                  {{ completed: 'Completed', current: 'Current', upcoming: 'Upcoming', pending: 'Not processed' }[st]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <button className="pr-cycle-nav" onClick={() => setFy(addMonths(fy, 12))} aria-label="Next year">
-          <Icon name="chevronRight" size={16} />
-        </button>
-      </div>
+    <div className="px">
+      <MonthRail
+        months={months}
+        ym={ym}
+        stateOf={stateOf}
+        short={(m) => MONTHS[Number(m.slice(5)) - 1].slice(0, 3)}
+        hint={(m) => `${shortMonth(m)}, ${cycleRange(m, s.cycleStartDay).map(dm).join(' to ')}`}
+        onPick={(m) => goto(`run/${m}`)}
+        onPrev={() => setFy(addMonths(fy, -12))}
+        onNext={() => setFy(addMonths(fy, 12))}
+      />
 
-      <h2 className="pr-month">
-        {`${monOf(ym)}-${ym.slice(0, 4)}`} <small>{`(${monDay(from)} - ${monDay(to)}, ${days} days)`}</small>
-      </h2>
+      <header className="px-head">
+        <h2 className="px-month">{monthLabel(ym)}</h2>
+        <span className="px-cycle">{`${dm(cf0)} to ${dm(ct0)}, ${days} days`}</span>
+      </header>
 
-      <section className="pr-summary">
-        <div className="pr-summary-left">
-          <div>
-            <span className="pr-cap">Total employees</span>
-            <strong>
-              {t.people.length}
-              <small className="pr-pos">
-                <Icon name="arrowUp" size={11} />
-                {joiners.length}
-              </small>
-              <small className="pr-neg">
-                <Icon name="chevronDown" size={11} />
-                {exits.length}
-              </small>
-            </strong>
-          </div>
-          <div>
-            <span className="pr-cap">Calendar days</span>
-            <strong>{days}</strong>
-          </div>
-          <div>
-            <span className="pr-cap">Payroll processed</span>
-            <strong>
-              {`${run?.processedAt ? run.processedCount ?? payable : 0}/${t.people.length}`} <small className="pr-cap">Employees</small>
-            </strong>
-          </div>
-        </div>
-        <div className="pr-formula">
-          <div>
-            <span>Total Payroll Cost</span>
-            <b>{inr(t.cost)}</b>
-            <Delta ym={prevYm} value={t.cost - prev.cost} />
-          </div>
-          <i>=</i>
-          <div>
-            <span>
-              Employee Deposit <Icon name="info" size={13} />
-            </span>
-            <b>{inr(t.deposit)}</b>
-            <Delta ym={prevYm} value={t.deposit - prev.deposit} />
-          </div>
-          <i>+</i>
-          <div>
-            <span>Total Deductions</span>
-            <b className="pr-accent">{inr(t.deductions)}</b>
-            <Delta ym={prevYm} value={t.deductions - prev.deductions} />
-          </div>
-          <i>+</i>
-          <div>
-            <span>Total contributions</span>
-            <b className="pr-accent">{inr(t.contributions)}</b>
-            <Delta ym={prevYm} value={t.contributions - prev.contributions} />
-          </div>
-        </div>
-      </section>
-
-      {run?.processedAt && run.dirty && !done && (
-        <div className="pr-warn">
-          <Icon name="alert" size={18} />
-          <span>There are changes in payroll inputs after the last payroll process. To apply the changes and lock payroll, save the respective run payroll steps and process payroll again</span>
-          <button className="pr-link" onClick={() => setPanels({ ...panels, activity: true })}>
-            View changes <Icon name="chevronRight" size={13} />
-          </button>
-        </div>
-      )}
-
-      <div className="pr-run-grid">
-        <section className="pr-panel pr-run">
-          <div className="pr-run-top">
-            <h3>Run Payroll</h3>
-            <div className="pr-run-intro">
-              <button className="pr-collapse" onClick={() => setOpen(!open)} aria-label={open ? 'Hide steps' : 'Show steps'}>
-                <Icon name={open ? 'chevronDown' : 'chevronRight'} size={14} />
-              </button>
-              <div className="pr-tip">
-                <strong>Everything you need to know about running payroll.</strong>
-                <p>Click the button below for a guided tutorial.</p>
-                <button onClick={() => setModal('tour')}>Click here</button>
+      <div className="px-run">
+        <div className="px-main">
+          <section aria-label="Where this month stands">
+            <GateLine gates={gates} />
+            <div className="px-now">
+              <h3>{now.title}</h3>
+              <p>{now.text}</p>
+              {(run?.rejection && run.status === 'Processed' && !done) || (run?.unlockRequest && locked) ? (
+                <div className="px-notes">
+                  {run?.rejection && run.status === 'Processed' && !done && <p>{`Sent back by ${who(run.rejection.by)}: “${run.rejection.reason}”`}</p>}
+                  {run?.unlockRequest && locked && <p>{`${who(run.unlockRequest.by)} asked to unlock this month: “${run.unlockRequest.reason}”${canApproveUnlock(db, user, run) ? '' : `. Waiting for ${approverIds(db).filter((id) => id !== run.unlockRequest.by).map(who).join(', ')}.`}`}</p>}
+                </div>
+              ) : null}
+              <div className="px-actions">
+                {ordered.map((a) => (
+                  <button key={a.k} className={`px-btn ${a.k === primaryKey ? 'primary' : a.review ? 'review' : a.quiet ? 'quiet' : ''}`} onClick={a.onClick} disabled={a.disabled} title={a.title}>
+                    {a.review && <Icon name="team" size={16} />}
+                    {a.label}
+                    {a.review && <span className="px-count">{t.people.length}</span>}
+                  </button>
+                ))}
               </div>
-              <div className="pr-progress">
-                <span className="pr-track">
-                  <span style={{ width: `${(stepsDone / STEPS.length) * 100}%` }} />
-                </span>
-                {`${stepsDone} of ${STEPS.length} steps completed`}
-              </div>
+              <p className="px-foot">{footNote}</p>
+              {hasErrors && !done && (
+                <div className="px-block">
+                  <h4 className="px-block-title">{`In the way (${errors.length})`}</h4>
+                  {errors.slice(0, 4).map((e, i) => (
+                    <div className="px-block-row" key={i}>
+                      <b>{fullName(e.emp)}</b>
+                      <span>{e.text}</span>
+                    </div>
+                  ))}
+                  <button className="px-btn quiet px-block-more" onClick={() => setModal('errors')}>
+                    {errors.length > 4 ? `See all ${errors.length} and fix them` : 'Open and fix'}
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-          {open && (
-            <div className="pr-steps">
+          </section>
+
+          <section aria-label="Inputs">
+            <h3 className="px-title">
+              Inputs<small>{`${stepsDone} of ${STEPS.length} saved. Open one to check or change it.`}</small>
+            </h3>
+            <ul className="px-ledger">
               {STEPS.map((st) => {
                 const info = run?.steps?.[st.key];
                 return (
-                  <button key={st.key} className={`pr-step ${info ? 'done' : ''}`} onClick={() => setStep(st)}>
-                    <span className="pr-step-icon" style={{ color: st.tone, background: `${st.tone}29` }}>
-                      <Icon name={st.icon} size={18} />
-                    </span>
-                    <span>
-                      <span className="pr-step-title">{st.title}</span>
-                      <span className="pr-step-sub">{info ? `Last Changes on ${stamp(info.at)} BY ${shortName(empById(db, info.by))}` : 'No changes saved yet'}</span>
-                    </span>
-                    {info && <Icon name="check" size={16} className="pr-step-check" />}
-                  </button>
+                  <li key={st.key}>
+                    <button className={info ? 'saved' : ''} onClick={() => setStep(st)}>
+                      <span className="px-mark">{info && <Icon name="check" size={11} />}</span>
+                      <span>
+                        <span className="px-ledger-title">{st.title}</span>
+                        <span className="px-ledger-sub">{info ? `Saved ${stamp(info.at)} by ${shortName(empById(db, info.by))}` : 'Nothing saved yet'}</span>
+                      </span>
+                      <Icon name="chevronRight" size={16} />
+                    </button>
+                  </li>
                 );
               })}
-            </div>
-          )}
-          {errors.length > 0 && !done && (
-            <div className="pr-error">
-              <Icon name="info" size={15} />
-              <span>{`There ${errors.length === 1 ? 'is 1 error' : `are ${errors.length} errors`} in Payroll run - Please review and fix them to proceed.`}</span>
-              <button onClick={() => setModal('errors')}>Review and fix</button>
-            </div>
-          )}
-          <div className="pr-run-foot">
-            <p>{footNote}</p>
-            <div className="pr-actions">
-              {!done && (
-                <button className="pr-btn" disabled={upcoming} onClick={process}>
-                  Process Payroll
-                </button>
-              )}
-              <button className="pr-btn" onClick={() => setModal('review')}>
-                Review all employees
-              </button>
-              <button className="pr-btn" onClick={() => setModal('register')}>
-                Payroll register
-              </button>
-              {!done && (
-                <button className="pr-btn pr-btn-fill" disabled={!canLock || upcoming} onClick={lock} title={canLock ? '' : 'Process payroll and fix all errors first'}>
-                  Lock Payroll
-                </button>
-              )}
-              {run?.status === 'Finalized' && (
-                <>
-                  <button className="pr-btn" onClick={unlock}>
-                    Unlock Payroll
-                  </button>
-                  <button className="pr-btn pr-btn-fill" onClick={release}>
-                    Release Payslips
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </section>
+            </ul>
+          </section>
+        </div>
 
-        <aside className="pr-side">
-          <section className="pr-panel pr-acc">
-            <button className="pr-acc-head" onClick={() => setPanels({ ...panels, activity: !panels.activity })}>
-              Activity <Icon name={panels.activity ? 'arrowUp' : 'chevronDown'} size={16} />
-            </button>
-            {panels.activity && (
-              <ul className="pr-activity">
-                {activity.length === 0 && <li className="pr-muted">No activity for this month yet.</li>}
-                {activity.slice(0, 30).map((a) => (
+        <aside className="px-side">
+          <CostTape
+            against={againstPrev}
+            parts={[
+              { label: 'Take-home pay', value: t.deposit, delta: t.deposit - prev.deposit },
+              { label: 'Deductions', value: t.deductions, delta: t.deductions - prev.deductions },
+              { label: 'Employer contributions', value: t.contributions, delta: t.contributions - prev.contributions },
+            ]}
+            total={{ value: t.cost, delta: t.cost - prev.cost }}
+          >
+            <div className="px-people">
+              <span>
+                <b>{t.people.length}</b> employees{joined || left ? `, ${joined} joined and ${left} left this cycle` : ''}
+              </span>
+              <span>
+                <b>{run?.processedAt ? run.processedCount ?? payable : 0}</b> of {t.people.length} processed
+              </span>
+            </div>
+          </CostTape>
+
+          <section aria-label="Activity">
+            <h3 className="px-title">Activity</h3>
+            {activity.length === 0 ? (
+              <p className="px-muted">Nothing has happened to this month yet.</p>
+            ) : (
+              <ul className="px-feed">
+                {activity.slice(0, panels.activity ? 30 : 6).map((a) => (
                   <li key={a.id}>
                     <span>{a.text}</span>
-                    <small>{`${stamp(a.at)} · ${shortName(empById(db, a.by))}`}</small>
+                    <small>{`${stamp(a.at)}, ${shortName(empById(db, a.by))}`}</small>
                   </li>
                 ))}
               </ul>
             )}
-          </section>
-          <section className="pr-panel pr-acc">
-            <button className="pr-acc-head" onClick={() => setPanels({ ...panels, help: !panels.help })}>
-              Help Resources <Icon name={panels.help ? 'arrowUp' : 'chevronDown'} size={16} />
-            </button>
-            {panels.help && (
-              <div className="pr-help">
-                {HELP.map(([q], i) => (
-                  <button key={q} onClick={() => setModal(i)}>
-                    <span>{q}</span>
-                    <Icon name="external" size={14} />
-                  </button>
-                ))}
-                <div className="pr-help-more">
-                  <Icon name="help" size={18} />
-                  <strong>Still need help?</strong>
-                  <a href="#/me/helpdesk">Raise a helpdesk ticket</a>
-                </div>
-              </div>
+            {activity.length > 6 && (
+              <button className="px-btn quiet" style={{ paddingInline: 0 }} onClick={() => setPanels({ ...panels, activity: !panels.activity })}>
+                {panels.activity ? 'Show fewer' : `Show all ${Math.min(activity.length, 30)}`}
+              </button>
             )}
+          </section>
+
+          <section aria-label="Help">
+            <h3 className="px-title">Need a hand?</h3>
+            <div className="px-links">
+              <button onClick={() => setModal('tour')}>Take the guided tour</button>
+              {HELP.map(([q], i) => (
+                <button key={q} onClick={() => setModal(i)}>
+                  {q}
+                </button>
+              ))}
+              <a href="#/me/helpdesk">Raise a helpdesk ticket</a>
+            </div>
           </section>
         </aside>
       </div>
 
+      {reason === 'unlock' && (
+        <ReasonModal
+          title={sep ? 'Request to unlock payroll' : 'Unlock payroll'}
+          label="Why does this month need to be unlocked?"
+          help={sep ? `${monthLabel(ym)} stays locked until an approver agrees. The reason is kept in the activity log.` : `${monthLabel(ym)} goes back to being editable and its payslips are worked out again from live data. The reason is kept in the activity log.`}
+          confirmText={sep ? 'Send request' : 'Unlock'}
+          danger={!sep}
+          onClose={() => setReason(null)}
+          onConfirm={(text) => (sep ? act((d) => requestUnlock(d, ym, user, text), 'Unlock request sent') : act((d) => unlockRun(d, ym, user, text), 'Payroll unlocked'))}
+        />
+      )}
+      {reason === 'sendBack' && <ReasonModal title="Send payroll back" label="What needs to be fixed?" confirmText="Send back" danger onClose={() => setReason(null)} onConfirm={(text) => act((d) => rejectRun(d, ym, user, text), 'Sent back')} />}
+      {reason === 'declineUnlock' && <ReasonModal title="Decline the unlock request" label="Why not?" confirmText="Decline" danger onClose={() => setReason(null)} onConfirm={(text) => act((d) => rejectUnlock(d, ym, user, text), 'Request declined')} />}
       {step && <StepModal step={step} ym={ym} user={user} t={t} locked={done || upcoming} range={[from, to]} onClose={() => setStep(null)} />}
       {modal === 'tour' && <Tour onClose={() => setModal(null)} />}
       {typeof modal === 'number' && (
@@ -998,7 +914,7 @@ function RunPayroll({ user, month }) {
             columns={[
               { key: 'emp', label: 'Employee', sortable: false, render: (r) => <EmpChip emp={r.emp} sub={r.emp.empNo} /> },
               { key: 'text', label: 'Problem', sortable: false },
-              { key: 'fix', label: '', sortable: false, render: (r) => <a className="btn btn-ghost btn-sm" href={`#/profile/${r.emp.id}`}>Fix in profile</a> },
+              { key: 'fix', label: '', sortable: false, render: (r) => (r.fixStep ? <Btn kind="ghost" small onClick={() => { setModal(null); setStep(STEPS.find((x) => x.key === r.fixStep)); }}>Decide</Btn> : <a className="btn btn-ghost btn-sm" href={`#/profile/${r.emp.id}`}>Fix in profile</a>) },
             ]}
           />
         </Modal>
@@ -1032,7 +948,7 @@ function RunPayroll({ user, month }) {
         </Modal>
       )}
       {slip && (
-        <Modal title={`Payslip — ${fullName(slip.emp)} — ${monthLabel(slip.ym)}`} onClose={() => setSlip(null)} wide footer={<Btn icon="print" onClick={() => window.print()}>Print</Btn>}>
+        <Modal title={`Payslip — ${fullName(slip.emp)} — ${monthLabel(slip.ym)}`} onClose={() => setSlip(null)} wide footer={<><Btn kind="ghost" icon="download" onClick={() => downloadPayslipPdf(db, slip)} title="Password: employee number followed by date of birth (DDMMYYYY)">PDF (password protected)</Btn><Btn icon="print" onClick={() => window.print()}>Print</Btn></>}>
           <PayslipView slip={slip} company={db.company} />
         </Modal>
       )}
@@ -1196,7 +1112,7 @@ function StepModal({ step, ym, user, t, locked, range, onClose }) {
     update((d) => {
       const r = touchRun(d, ym);
       r.steps[step.key] = { at: new Date().toISOString(), by: user.id };
-      if (r.processedAt) r.dirty = true;
+      markInputsChanged(d, ym, user);
       logActivity(d, ym, user, `Saved "${step.title}"`);
     });
     toast('Step saved');
@@ -1215,7 +1131,36 @@ function StepModal({ step, ym, user, t, locked, range, onClose }) {
 
   let content;
   if (step.key === 'attendance') {
+    const exc = exceptionDays(db, ym);
+    const decide = (x, value) => {
+      update((d) => {
+        setResolution(d, x.emp.id, x.date, value, user);
+      });
+      changed(`${value ? `Marked ${fmtDate(x.date)} for ${fullName(x.emp)} as ${value.toLowerCase()}` : `Cleared the decision for ${fmtDate(x.date)} for ${fullName(x.emp)}`}`);
+    };
     content = (
+      <>
+      <h4 className="form-section" style={{ marginTop: 0 }}>Attendance exceptions ({exc.filter((x) => !x.resolution).length} without a decision)</h4>
+      <p className="pr-muted" style={{ marginBottom: 10 }}>
+        Days marked Absent or Action Required in this cycle. Choose what happens to each: paid, loss of pay, or half a day of loss of pay. Every day needs a decision before payroll can be locked, and you can change any of them until then. A day leaves this list when the employee applies leave or regularizes it. Exception employees are not listed.
+      </p>
+      <DataTable
+        rows={exc.map((x) => ({ ...x, id: `${x.emp.id}-${x.date}` }))}
+        empty="No attendance exceptions in this cycle."
+        pageSize={20}
+        columns={[
+          { key: 'emp', label: 'Employee', sortable: false, render: (x) => <EmpChip emp={x.emp} sub={x.emp.empNo} /> },
+          { key: 'date', label: 'Date', render: (x) => fmtDate(x.date) },
+          { key: 'status', label: 'What happened', sortable: false, render: (x) => <span><Badge tone={x.status === 'Absent' ? 'red' : 'amber'}>{x.status}</Badge>{x.note ? <span className="muted"> {x.note}</span> : null}{x.remark?.kind === 'pending' ? <span className="muted"> · {x.remark.text}</span> : null}</span> },
+          { key: 'decision', label: 'Decision', sortable: false, render: (x) => (
+            <select value={x.resolution} disabled={locked} onChange={(e) => decide(x, e.target.value)} aria-label={`Decision for ${fullName(x.emp)} on ${x.date}`}>
+              <option value="">Not decided</option>
+              {RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          ) },
+        ]}
+      />
+      <h4 className="form-section" style={{ marginTop: 20 }}>Payable days</h4>
       <DataTable
         rows={t.slips}
         rowKey={(x) => x.emp.id}
@@ -1228,6 +1173,7 @@ function StepModal({ step, ym, user, t, locked, range, onClose }) {
           { key: 'paidDays', label: 'Payable days', render: (x) => <strong>{x.paidDays}</strong> },
         ]}
       />
+      </>
     );
   } else if (step.key === 'joinees') {
     const joiners = t.people.filter((e) => e.dateOfJoining >= from && e.dateOfJoining <= to);
@@ -1313,7 +1259,7 @@ function StepModal({ step, ym, user, t, locked, range, onClose }) {
           </div>
           <DataTable rows={waiting} empty="Nothing waiting for payment." columns={[empCol(db), { key: 'label', label: 'Item' }, { key: 'amount', label: 'Amount', render: (c) => money(c.amount) }, { key: 'act', label: '', sortable: false, render: (c) => !locked && <PayNowButton onClick={() => pay(c)} /> }]} />
         </div>
-        <AdjList db={db} ym={ym} kinds={['Reimbursement', 'Adhoc payment', 'Deduction']} title="Reimbursements, adhoc payments and deductions" locked={locked} changed={changed} />
+        <AdjList db={db} ym={ym} kinds={['Reimbursement', 'Adhoc payment', 'Leave encashment', 'Gratuity', 'Deduction']} title="Reimbursements, adhoc payments and deductions" locked={locked} changed={changed} />
       </>
     );
   } else if (step.key === 'hold') {
@@ -1434,7 +1380,7 @@ function MonthSelect({ value, onChange, months, label = 'Payroll month' }) {
   );
 }
 
-const runLabel = (r) => (r.status === 'Finalized' ? 'Locked' : r.status);
+const runLabel = (r) => (r.status === 'Finalized' ? 'Locked' : r.status === 'Submitted' ? 'Awaiting approval' : r.status);
 
 function PayrollAdmin({ db, user, sub }) {
   const cur = currentPayMonth(db);
@@ -1445,6 +1391,7 @@ function PayrollAdmin({ db, user, sub }) {
   const [decl, setDecl] = useState(null);
   const [emp, setEmp] = useState(null);
   const [revise, setRevise] = useState(null);
+  const [challan, setChallan] = useState(null);
   const sumDed = (prefix) => sumOf(t.slips, (x) => x.deductions.find((d) => d[0].startsWith(prefix))?.[1] || 0);
   const run = db.payrollRuns.find((r) => r.month === ym);
   const br = (e) => breakupFor(db, e);
@@ -1518,8 +1465,12 @@ function PayrollAdmin({ db, user, sub }) {
     );
   } else if (sub === 'statutory') {
     const ee = (x) => x.deductions.find((d) => d[0].startsWith('Provident'))?.[1] || 0;
-    const epf = (x) => Math.min(x.earnings[0][1], settingsFor(db, x.emp).pfCeiling);
-    const ecr = [{ label: 'UAN', csv: (x) => x.emp.uan }, { label: 'Name', csv: (x) => fullName(x.emp) }, { label: 'Gross wages', csv: (x) => Math.round(x.gross) }, { label: 'EPF wages', csv: (x) => Math.round(epf(x)) }, { label: 'EE share', csv: (x) => Math.round(ee(x)) }, { label: 'ER share', csv: (x) => Math.round(x.employer[0][1]) }];
+    const pft = pfTotals(db, t.slips);
+    const ecr = ecrFile(db, t.slips);
+    const esiList = esiRows(db, t.slips);
+    const esiEmployer = sumOf(t.slips, (x) => x.esi?.employer || 0);
+    const esiNow = esiPolicy(db);
+    const period = esiPeriodOf(esiNow, ym);
     body = (
       <div className="pr-stack">
         <div className="row">
@@ -1527,11 +1478,11 @@ function PayrollAdmin({ db, user, sub }) {
         </div>
         <div className="pr-cards4">
           <div className="pr-kpi">
-            <div className="pr-kpi-top"><span>PF (employee)</span><em>{`ER ${inr(sumOf(t.slips, (x) => x.employer[0][1]))}`}</em></div>
+            <div className="pr-kpi-top"><span>PF (employee)</span><em>{`ER ${inr(pft.employer)}`}</em></div>
             <strong>{inr(sumDed('Provident'))}</strong>
           </div>
           <div className="pr-kpi">
-            <div className="pr-kpi-top"><span>ESI (employee)</span></div>
+            <div className="pr-kpi-top"><span>ESI (employee)</span><em>{`ER ${inr(esiEmployer)}`}</em></div>
             <strong>{inr(sumDed('ESI'))}</strong>
           </div>
           <div className="pr-kpi">
@@ -1543,18 +1494,78 @@ function PayrollAdmin({ db, user, sub }) {
             <strong>{inr(sumDed('Income'))}</strong>
           </div>
         </div>
-        <Panel title="PF ECR summary" right={<Btn kind="ghost" small icon="download" onClick={() => exportCSV(`pf-ecr-${ym}`, ecr, t.slips)}>Export ECR</Btn>}>
+        <Panel title="PF ECR summary" right={<Btn kind="ghost" small icon="download" onClick={() => downloadEcr(db, t.slips, ym)}>Download ECR</Btn>}>
+          <p className="pr-muted" style={{ marginBottom: 12 }}>
+            {pft.members} member(s). Employee {money(pft.employee)} + employer EPF {money(pft.epf)} + employer EPS {money(pft.eps)} + EDLI {money(pft.edli)} + administration {money(pft.admin)}{pft.adminSum > 0 && pft.admin > Math.round(pft.adminSum) ? ' (raised to the minimum)' : ''} = <strong>{money(pft.remit)}</strong> to pay with the challan. The file follows the ECR 2.0 layout.
+          </p>
+          {ecr.missing.length > 0 && <p className="pr-warn" style={{ marginBottom: 12 }}>No UAN on the profile, so left out of the file: {ecr.missing.map(fullName).join(', ')}.</p>}
           <DataTable
-            rows={t.slips}
-            rowKey={(x) => x.emp.id}
+            rows={ecr.rows}
+            empty="No employee has PF deducted this month."
+            rowKey={(r) => r.slip.emp.id}
             pageSize={30}
             columns={[
-              { key: 'uan', label: 'UAN', sortable: false, render: (x) => x.emp.uan || '—' },
-              { key: 'emp', label: 'Employee', sortable: false, render: (x) => fullName(x.emp) },
-              { key: 'gross', label: 'Gross wages', render: (x) => money(x.gross) },
-              { key: 'epf', label: 'EPF wages', sortable: false, render: (x) => money(epf(x)) },
-              { key: 'ee', label: 'Employee 12%', sortable: false, render: (x) => money(ee(x)) },
-              { key: 'er', label: 'Employer 12%', sortable: false, render: (x) => money(x.employer[0][1]) },
+              { key: 'uan', label: 'UAN', sortable: false, render: (r) => r.slip.emp.uan || '—' },
+              { key: 'emp', label: 'Employee', sortable: false, render: (r) => fullName(r.slip.emp) },
+              { key: 'gross', label: 'Gross wages', render: (r) => money(r.slip.gross) },
+              { key: 'epf', label: 'EPF wages', sortable: false, render: (r) => money(r.pf.wage) },
+              { key: 'eps', label: 'EPS wages', sortable: false, render: (r) => money(r.pf.epsWage) },
+              { key: 'ee', label: 'Employee EPF', sortable: false, render: (r) => money(r.pf.employee) },
+              { key: 'er1', label: 'Employer EPS', sortable: false, render: (r) => money(r.pf.eps) },
+              { key: 'er2', label: 'Employer EPF', sortable: false, render: (r) => money(r.pf.employer - r.pf.eps) },
+              { key: 'ncp', label: 'Days not paid', sortable: false, render: (r) => Math.round(r.slip.lop || 0) },
+            ]}
+          />
+        </Panel>
+        <Panel title="ESI contribution" right={<Btn kind="ghost" small icon="download" onClick={() => downloadEsi(db, t.slips, ym)}>Download ESI file</Btn>}>
+          <p className="pr-muted" style={{ marginBottom: 12 }}>
+            {esiNow.enabled === false
+              ? 'ESI is switched off for the company (Payroll > Settings > PF & ESI).'
+              : <>Contribution period {monthLabel(period.start)} – {monthLabel(period.end)}. Covered for the whole period if wages in its first month are up to {money(esiNow.grossLimit)}. Employee {esiNow.employeeRate}% and employer {esiNow.employerRate}% of wages, without overtime, rounded up to the rupee. Total to pay: <strong>{money(sumDed('ESI') + esiEmployer)}</strong>.</>}
+          </p>
+          {esiList.missing.length > 0 && <p className="pr-warn" style={{ marginBottom: 12 }}>No ESI number on the profile, so left out of the file: {esiList.missing.map(fullName).join(', ')}.</p>}
+          <DataTable
+            rows={esiList.rows}
+            empty="No employee is covered by ESI this month."
+            rowKey={(r) => r.slip.emp.id}
+            pageSize={30}
+            columns={[
+              { key: 'ip', label: 'ESI number', sortable: false, render: (r) => r.cols[0] },
+              { key: 'emp', label: 'Employee', sortable: false, render: (r) => fullName(r.slip.emp) },
+              { key: 'days', label: 'Days paid', sortable: false, render: (r) => r.cols[2] },
+              { key: 'wages', label: 'ESI wages', sortable: false, render: (r) => money(r.cols[3]) },
+              { key: 'ee', label: 'Employee', sortable: false, render: (r) => money(r.slip.esi?.employee ?? 0) },
+              { key: 'er', label: 'Employer', sortable: false, render: (r) => money(r.slip.esi?.employer ?? 0) },
+            ]}
+          />
+        </Panel>
+        <Panel title="Challan register" right={<Btn small icon="plus" onClick={() => setChallan({ month: ym, paidOn: todayISO() })}>Record a payment</Btn>}>
+          <p className="pr-muted" style={{ marginBottom: 12 }}>What is due for {monthLabel(ym)} against the payments you record. Record each challan after you pay it at the portal.</p>
+          <DataTable
+            rows={CHALLAN_TYPES.map((tp) => {
+              const due = { PF: pft.remit, ESI: sumDed('ESI') + esiEmployer, 'Professional Tax': sumDed('Professional'), LWF: sumDed('Labour') + sumOf(t.slips, (x) => (x.employer.find(([k]) => k === 'Employer LWF') || [0, 0])[1]), TDS: sumDed('Income') }[tp];
+              const paid = sumOf((db.challans || []).filter((c) => c.type === tp && c.month === ym), (c) => c.amount);
+              return { id: tp, type: tp, due, paid };
+            })}
+            columns={[
+              { key: 'type', label: 'Payment' },
+              { key: 'due', label: `Due for ${monthLabel(ym)}`, render: (r) => money(r.due) },
+              { key: 'paid', label: 'Recorded as paid', render: (r) => money(r.paid) },
+              { key: 'st', label: 'Status', sortable: false, render: (r) => (r.due <= 0 ? <Badge tone="grey">Nothing due</Badge> : r.paid >= r.due ? <Badge tone="green">Paid</Badge> : r.paid > 0 ? <Badge tone="amber">Part paid</Badge> : <Badge tone="red">Not paid</Badge>) },
+            ]}
+          />
+          <h4 className="form-section" style={{ marginTop: 18 }}>Payments recorded</h4>
+          <DataTable
+            rows={[...(db.challans || [])].sort((a, b) => (b.paidOn || '').localeCompare(a.paidOn || ''))}
+            empty="No payments recorded yet."
+            columns={[
+              { key: 'type', label: 'Payment' },
+              { key: 'month', label: 'For', render: (c) => monthLabel(c.month) },
+              { key: 'amount', label: 'Amount', render: (c) => money(c.amount) },
+              { key: 'paidOn', label: 'Paid on', render: (c) => fmtDate(c.paidOn) },
+              { key: 'ref', label: 'Challan / reference no.' },
+              { key: 'bank', label: 'Bank' },
+              { key: '_a', label: '', sortable: false, align: 'right', render: (c) => <Btn kind="icon" icon="trash" title="Delete" aria-label="Delete this payment" onClick={() => { if (confirmAction('Delete this recorded payment?')) removeItem('challans', c.id); }} /> },
             ]}
           />
         </Panel>
@@ -1604,9 +1615,29 @@ function PayrollAdmin({ db, user, sub }) {
     <>
       {body}
       {slip && (
-        <Modal title={`Payslip — ${fullName(slip.emp)} — ${monthLabel(slip.ym)}`} onClose={() => setSlip(null)} wide footer={<Btn icon="print" onClick={() => window.print()}>Print</Btn>}>
+        <Modal title={`Payslip — ${fullName(slip.emp)} — ${monthLabel(slip.ym)}`} onClose={() => setSlip(null)} wide footer={<><Btn kind="ghost" icon="download" onClick={() => downloadPayslipPdf(db, slip)} title="Password: employee number followed by date of birth (DDMMYYYY)">PDF (password protected)</Btn><Btn icon="print" onClick={() => window.print()}>Print</Btn></>}>
           <PayslipView slip={slip} company={db.company} />
         </Modal>
+      )}
+      {challan && (
+        <FormModal
+          title="Record a payment"
+          fields={[
+            { key: 'type', label: 'Payment', type: 'select', options: CHALLAN_TYPES, required: true },
+            { key: 'month', label: 'For the payroll month', type: 'select', options: months.map((m) => ({ value: m, label: monthLabel(m) })), required: true },
+            { key: 'amount', label: 'Amount paid (₹)', type: 'number', required: true },
+            { key: 'paidOn', label: 'Paid on', type: 'date', required: true },
+            { key: 'ref', label: 'Challan / reference number' },
+            { key: 'bank', label: 'Bank' },
+          ]}
+          initial={challan}
+          onClose={() => setChallan(null)}
+          onSave={(v) => {
+            addItem('challans', { ...v, amount: Number(v.amount) });
+            setChallan(null);
+            toast('Payment recorded');
+          }}
+        />
       )}
       {decl && <FormModal title={`Declaration — ${fullName(empById(db, decl.empId))}`} fields={DECLARATION_FIELDS.map((f) => ({ ...f, disabled: true }))} initial={{ regime: decl.regime, ...decl.items }} submitLabel="Close" onClose={() => setDecl(null)} onSave={() => setDecl(null)} wide />}
       {emp && (
@@ -1700,16 +1731,15 @@ function Approvals({ db, user, sub }) {
 // ---------- loans ----------
 function Loans({ db, user }) {
   const ym = currentPayMonth(db);
-  const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5)) - Number(a.slice(5));
-  const paidMonths = (l) => (l.startMonth && l.startMonth < ym ? Math.min(Number(l.tenureMonths), monthsBetween(l.startMonth, ym)) : 0);
-  const emi = (l) => Number(l.amount) / Number(l.tenureMonths || 1);
+  const paidMonths = (l) => loanPaidBefore(l, ym);
+  const emi = loanEmi;
   const active = db.loans.filter((l) => l.status === 'Active');
   return (
     <div className="pr-stack">
       <div className="pr-cards4">
         <div className="pr-kpi"><div className="pr-kpi-top"><span>Active loans</span></div><strong>{active.length}</strong></div>
         <div className="pr-kpi"><div className="pr-kpi-top"><span>Amount lent</span></div><strong>{inr(sumOf(active, (l) => l.amount))}</strong></div>
-        <div className="pr-kpi"><div className="pr-kpi-top"><span>Outstanding</span></div><strong>{inr(sumOf(active, (l) => l.amount - emi(l) * paidMonths(l)))}</strong></div>
+        <div className="pr-kpi"><div className="pr-kpi-top"><span>Outstanding</span></div><strong>{inr(sumOf(active, (l) => loanOutstanding(l, ym)))}</strong></div>
         <div className="pr-kpi"><div className="pr-kpi-top"><span>EMI this month</span><em>{shortMonth(ym)}</em></div><strong>{inr(sumOf(active.filter((l) => l.startMonth <= ym && paidMonths(l) < l.tenureMonths), emi))}</strong></div>
       </div>
       <Crud
@@ -1776,6 +1806,23 @@ function Benefits({ db }) {
   );
 }
 
+const CHALLAN_TYPES = ['PF', 'ESI', 'Professional Tax', 'LWF', 'TDS'];
+
+// ---------- PF and ESI files ----------
+// The ECR 2.0 file. Members with no UAN cannot be put in it, so say who was left out.
+function downloadEcr(db, slips, ym) {
+  const f = ecrFile(db, slips);
+  if (!f.lines.length) return toast('No employee has PF this month.', 'error');
+  exportText(`ECR_${ym}`, f.text);
+  toast(f.missing.length ? `ECR downloaded with ${f.lines.length} member(s). Left out, no UAN: ${f.missing.map(fullName).join(', ')}.` : `ECR downloaded with ${f.lines.length} member(s).`, f.missing.length ? 'error' : undefined);
+}
+function downloadEsi(db, slips, ym) {
+  const f = esiRows(db, slips);
+  if (!f.rows.length) return toast('No employee is covered by ESI this month.', 'error');
+  exportCSV(`ESI_${ym}`, ESI_COLUMNS.map((label, i) => ({ label, csv: (r) => r.cols[i] })), f.rows);
+  toast(f.missing.length ? `ESI file downloaded with ${f.rows.length} employee(s). Left out, no ESI number: ${f.missing.map(fullName).join(', ')}.` : `ESI file downloaded with ${f.rows.length} employee(s).`, f.missing.length ? 'error' : undefined);
+}
+
 // ---------- reports ----------
 function Reports({ db }) {
   const cur = currentPayMonth(db);
@@ -1791,15 +1838,49 @@ function Reports({ db }) {
   };
   const REPORTS = [
     ['Payroll register', 'Every earning, deduction and employer cost for each employee, with totals.', () => { const reg = payrollRegister(db, ym); exportCSV(`payroll-register-${ym}`, reg.columns, reg.rows); }],
-    ['Bank transfer statement', 'Account details and net pay for the bank upload.', () => exportCSV(`bank-transfer-${ym}`, [...base, { label: 'Account holder', csv: (x) => x.emp.bank?.accountHolder }, { label: 'Bank', csv: (x) => x.emp.bank?.bankName }, { label: 'Account number', csv: (x) => x.emp.bank?.accountNumber }, { label: 'IFSC', csv: (x) => x.emp.bank?.ifsc }, { label: 'Net pay', csv: (x) => Math.round(x.net) }], slips().filter((x) => !x.onHold))],
-    ['PF ECR', 'Provident fund wages and shares for the ECR upload.', () => exportCSV(`pf-ecr-${ym}`, [{ label: 'UAN', csv: (x) => x.emp.uan }, ...base, { label: 'Gross wages', csv: (x) => Math.round(x.gross) }, { label: 'EPF wages', csv: (x) => Math.round(Math.min(x.earnings[0][1], settingsFor(db, x.emp).pfCeiling)) }, { label: 'EE share', csv: ded('Provident') }, { label: 'ER share', csv: (x) => Math.round(x.employer[0][1]) }], slips())],
-    ['ESI contribution', 'Employees covered by ESI and their contributions.', () => exportCSV(`esi-${ym}`, [...base, { label: 'ESI number', csv: (x) => x.emp.esiNumber }, { label: 'Gross', csv: (x) => Math.round(x.gross) }, { label: 'Employee 0.75%', csv: ded('ESI') }], slips().filter((x) => ded('ESI')(x) > 0))],
+    ['Bank transfer statement', 'Account details and net pay for the bank upload.', () => exportCSV(`bank-transfer-${ym}`, [...base, { label: 'Account holder', csv: (x) => x.emp.bank?.accountHolder }, { label: 'Bank', csv: (x) => x.emp.bank?.bankName }, { label: 'Account number', csv: (x) => x.emp.bank?.accountNumber }, { label: 'IFSC', csv: (x) => x.emp.bank?.ifsc }, { label: 'Net pay', csv: (x) => Math.round(x.net) }, { label: 'Payment mode', csv: () => 'NEFT' }, { label: 'Narration', csv: () => `Salary ${monthLabel(ym)}` }], slips().filter((x) => !x.onHold))],
+    ['PF ECR', 'The ECR 2.0 text file for the EPFO upload, with EPF, EPS and EDLI wages and contributions.', () => downloadEcr(db, slips(), ym)],
+    ['ESI contribution', 'The monthly contribution file for the ESIC upload: days worked and wages of every covered employee.', () => downloadEsi(db, slips(), ym)],
+    ['Form 130 data (annual salary and tax)', 'For your CA: each employee’s pay, PF, Professional Tax, taxable income, tax for the year and TDS so far in this financial year. Unlocked months use current figures.', () => {
+      const months = Array.from({ length: 12 }, (_, i) => addMonths(`${fyOf(ym)}-04`, i)).filter((m) => m <= ym);
+      const ded = (sl, p) => sumOf(sl, (s) => (s.deductions.find((d) => d[0].startsWith(p)) || [0, 0])[1]);
+      const rows = monthTotals(db, ym).people.map((e) => {
+        const sl = months.map((m) => payslipFor(db, e, m));
+        return { e, gross: sumOf(sl, (s) => s.gross), pf: ded(sl, 'Provident'), pt: ded(sl, 'Professional'), tds: ded(sl, 'Income'), tp: taxProjection(db, e, ym) };
+      });
+      exportCSV(`form130-data-${fyOf(ym)}-${ym}`, [{ label: 'Employee', csv: (r) => fullName(r.e) }, { label: 'Emp no', csv: (r) => r.e.empNo }, { label: 'PAN', csv: (r) => r.e.pan }, { label: 'Tax regime', csv: (r) => r.tp.regime }, { label: 'Gross pay to date', csv: (r) => Math.round(r.gross) }, { label: 'Employee PF', csv: (r) => Math.round(r.pf) }, { label: 'Professional Tax', csv: (r) => Math.round(r.pt) }, { label: 'Taxable income (year)', csv: (r) => Math.round(r.tp.taxable) }, { label: 'Tax for the year', csv: (r) => Math.round(r.tp.annualTax) }, { label: 'TDS deducted to date', csv: (r) => Math.round(r.tds) }], rows);
+    }],
+    ['Form 138 data (quarterly TDS)', 'For your CA: TDS deducted each month of the quarter that holds this month, with PAN.', () => {
+      const qStart = [`${fyOf(ym)}-04`, `${fyOf(ym)}-07`, `${fyOf(ym)}-10`, `${fyOf(ym) + 1}-01`].filter((m) => m <= ym).pop();
+      const months = [0, 1, 2].map((i) => addMonths(qStart, i)).filter((m) => m <= ym);
+      const rows = months.flatMap((m) => monthTotals(db, m).slips.map((s) => ({ m, s })));
+      exportCSV(`form138-data-${qStart}`, [{ label: 'Employee', csv: (r) => fullName(r.s.emp) }, { label: 'PAN', csv: (r) => r.s.emp.pan }, { label: 'Month', csv: (r) => monthLabel(r.m) }, { label: 'Gross pay', csv: (r) => Math.round(r.s.gross) }, { label: 'TDS deducted', csv: (r) => Math.round((r.s.deductions.find((d) => d[0].startsWith('Income')) || [0, 0])[1]) }], rows);
+    }],
+    ['Form 124 data (tax declarations)', 'The investment declarations employees have made, with regime, rent and landlord details.', () =>
+      exportCSV('form124-declarations', [{ label: 'Employee', csv: (d) => fullName(empById(db, d.empId)) }, { label: 'PAN', csv: (d) => empById(db, d.empId)?.pan }, { label: 'Financial year', csv: (d) => d.fy }, { label: 'Regime', csv: (d) => d.regime }, { label: '80C', csv: (d) => declarationTotal(d).c80 }, { label: '80D', csv: (d) => declarationTotal(d).d80 }, { label: 'Other deductions', csv: (d) => declarationTotal(d).other }, { label: 'Annual rent', csv: (d) => declarationTotal(d).hraRent }, { label: 'Landlord', csv: (d) => d.items?.landlordName }, { label: 'Landlord PAN', csv: (d) => d.items?.landlordPan }, { label: 'Status', csv: (d) => d.status }], db.taxDeclarations)],
+    ['Muster roll', 'Attendance of every employee for each day of the pay cycle (P present, W work from home, L leave, A absent, AR action required, WO weekly off, H holiday).', () => {
+      const [from, to] = cycleRange(ym, cycleStartOf(db));
+      const days = [];
+      for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
+      const code = { Present: 'P', WFH: 'W', Leave: 'L', Absent: 'A', 'Action Required': 'AR', 'Weekly off': 'WO', Holiday: 'H' };
+      exportCSV(`muster-roll-${ym}`, [{ label: 'Employee', csv: (e) => fullName(e) }, { label: 'Emp no', csv: (e) => e.empNo }, ...days.map((d) => ({ label: d.slice(8) + '/' + d.slice(5, 7), csv: (e) => (e.attendanceExempt === 'Yes' ? 'EX' : d < e.dateOfJoining ? '' : code[attendanceFor(db, e.id, d).status] || '') }))], monthTotals(db, ym).people);
+    }],
+    ['Leave register', 'Approved leave taken in this pay cycle.', () => {
+      const [from, to] = cycleRange(ym, cycleStartOf(db));
+      exportCSV(`leave-register-${ym}`, [{ label: 'Employee', csv: (r) => fullName(empById(db, r.empId)) }, { label: 'Emp no', csv: (r) => empById(db, r.empId)?.empNo }, { label: 'Leave type', csv: (r) => db.leaveTypes.find((t) => t.id === r.typeId)?.name }, { label: 'From', csv: (r) => r.from }, { label: 'To', csv: (r) => r.to }, { label: 'Days', csv: (r) => r.days }, { label: 'Loss of pay days', csv: (r) => r.lopDays || 0 }], db.leaveRequests.filter((r) => r.status === 'Approved' && r.from >= from && r.from <= to));
+    }],
+    ['Change audit', 'Who changed pay-related details (salary, bank, statutory numbers, pay group) and payroll settings in this pay cycle.', () => {
+      const [from, to] = cycleRange(ym, cycleStartOf(db));
+      const rows = (db.auditLog || []).filter((a) => a.at.slice(0, 10) >= from && a.at.slice(0, 10) <= to);
+      if (!rows.length) return toast('No changes were recorded in this pay cycle.');
+      exportCSV(`change-audit-${ym}`, [{ label: 'When', csv: (a) => a.at.replace('T', ' ').slice(0, 19) }, { label: 'Changed by', csv: (a) => fullName(empById(db, a.by)) || a.by }, { label: 'Type', csv: (a) => a.kind }, { label: 'Employee', csv: (a) => (a.empId ? fullName(empById(db, a.empId)) : '') }, { label: 'What changed', csv: (a) => a.field }, { label: 'From', csv: (a) => a.from }, { label: 'To', csv: (a) => a.to }], rows);
+    }],
     ['Professional tax', 'PT deducted for each employee.', () => exportCSV(`pt-${ym}`, [...base, { label: 'Gross', csv: (x) => Math.round(x.gross) }, { label: 'PT', csv: ded('Professional') }], slips())],
     ['Labour welfare fund', 'LWF deducted this month.', () => exportCSV(`lwf-${ym}`, [...base, { label: 'Employee LWF', csv: ded('Labour') }, { label: 'Employer LWF', csv: (x) => Number(settingsFor(db, x.emp).lwfEmployer || 0) }], slips().filter((x) => ded('Labour')(x) > 0))],
     ['TDS summary', 'Income tax deducted, with PAN and tax regime.', () => exportCSV(`tds-${ym}`, [...base, { label: 'PAN', csv: (x) => x.emp.pan }, { label: 'Regime', csv: (x) => x.regime }, { label: 'TDS', csv: ded('Income') }], slips())],
     ['CTC report', 'Annual CTC, band and department of every employee.', () => exportCSV('ctc-report', [{ label: 'Employee', csv: (e) => fullName(e) }, { label: 'Emp no', csv: (e) => e.empNo }, { label: 'Department', csv: (e) => e.department }, { label: 'Band', csv: (e) => bandOf(db, e)?.name }, { label: 'Annual CTC', csv: (e) => e.ctc }], db.employees.filter((e) => e.status !== 'Exited'))],
     ['Variance report', 'Change in net pay against the month before.', variance],
-    ['Loan outstanding', 'Active loans with EMI and tenure.', () => exportCSV('loans', [{ label: 'Employee', csv: (l) => fullName(empById(db, l.empId)) }, { label: 'Type', csv: (l) => l.type }, { label: 'Amount', csv: (l) => l.amount }, { label: 'EMI', csv: (l) => Math.round(l.amount / l.tenureMonths) }, { label: 'Start', csv: (l) => l.startMonth }, { label: 'Status', csv: (l) => l.status }], db.loans)],
+    ['Loan outstanding', 'Active loans with EMI and tenure.', () => exportCSV('loans', [{ label: 'Employee', csv: (l) => fullName(empById(db, l.empId)) }, { label: 'Type', csv: (l) => l.type }, { label: 'Amount', csv: (l) => l.amount }, { label: 'EMI', csv: (l) => Math.round(loanEmi(l)) }, { label: 'Start', csv: (l) => l.startMonth }, { label: 'Status', csv: (l) => l.status }], db.loans)],
     ['Salaries on hold', 'Employees whose pay is held this month.', () => exportCSV(`holds-${ym}`, [...base, { label: 'Net pay held', csv: (x) => Math.round(x.net) }], slips().filter((x) => x.onHold))],
     ['Reimbursements paid', 'Claims and expenses paid through payroll.', () => exportCSV(`reimbursements-${ym}`, [{ label: 'Employee', csv: (a) => fullName(empById(db, a.empId)) }, { label: 'Type', csv: (a) => a.kind }, { label: 'Amount', csv: (a) => a.amount }, { label: 'Note', csv: (a) => a.note }], db.payrollAdjustments.filter((a) => a.month === ym && a.kind === 'Reimbursement'))],
   ];
@@ -1832,13 +1913,13 @@ const GROUP_FIELDS = [
   { key: 'payDay', label: 'Pay day', type: 'select', options: ['Last working day', '1st of next month', '7th of next month'], section: 'Pay and lock' },
   { key: 'lockDay', label: 'Attendance & inputs lock day', type: 'number' },
   { key: 'pfEnabled', label: 'Provident Fund applies', type: 'checkbox', section: 'Statutory deductions' },
-  { key: 'pfCeiling', label: 'PF wage ceiling', type: 'number', show: (v) => v.pfEnabled },
-  { key: 'esiEnabled', label: 'ESI applies (gross up to ₹21,000)', type: 'checkbox' },
+  { key: 'pfCeiling', label: 'PF wage ceiling (blank follows the statutory rules)', type: 'number', min: 0, show: (v) => v.pfEnabled, help: 'Leave empty to use the ceiling set under Settings > PF & ESI. Fill it in only if this group needs its own.' },
+  { key: 'esiEnabled', label: 'ESI applies (wage limit is set under Settings > PF & ESI)', type: 'checkbox' },
   { key: 'ptEnabled', label: 'Professional tax applies', type: 'checkbox' },
-  { key: 'ptAmount', label: 'Professional tax / month', type: 'number', show: (v) => v.ptEnabled },
+  { key: 'ptAmount', label: 'Fixed Professional Tax / month (blank follows the state slabs)', type: 'number', min: 0, show: (v) => v.ptEnabled, help: 'Leave empty to use the slabs under Settings > PT & LWF. Fill it in only to charge one fixed amount to this group.' },
   { key: 'lwfEnabled', label: 'Labour welfare fund applies', type: 'checkbox' },
-  { key: 'lwfEmployee', label: 'LWF employee share', type: 'number', show: (v) => v.lwfEnabled },
-  { key: 'lwfEmployer', label: 'LWF employer share', type: 'number', show: (v) => v.lwfEnabled },
+  { key: 'lwfEmployee', label: 'LWF employee share (each payment)', type: 'number', show: (v) => v.lwfEnabled },
+  { key: 'lwfEmployer', label: 'LWF employer share (each payment)', type: 'number', show: (v) => v.lwfEnabled, help: 'Taken only in the months set under Settings > PT & LWF.' },
 ];
 
 // Mark one pay group / structure as the default for employees who have none of their own.
@@ -1966,7 +2047,7 @@ function StructureEditor({ db, st, onClose }) {
   const setComp = (i, ch) => setV((s) => ({ ...s, components: s.components.map((c, j) => (j === i ? { ...c, ...ch } : c)) }));
   const setHra = (i) => setV((s) => ({ ...s, components: s.components.map((c, j) => ({ ...c, role: j === 0 ? 'basic' : j === i ? (c.role === 'hra' ? '' : 'hra') : c.role === 'hra' ? '' : c.role })) }));
   const draft = { ...v, components: v.components.map((c, i) => ({ ...c, role: i === 0 ? 'basic' : c.role })) };
-  const preview = salaryBreakup(Number(sample) || 0, db.payrollSettings, draft);
+  const preview = salaryBreakup(Number(sample) || 0, { ...db.payrollSettings, pf: pfPolicy(db) }, draft);
   const balance = v.components.findIndex((c) => c.type === 'Balance');
 
   const validate = () => {
@@ -2019,7 +2100,7 @@ function StructureEditor({ db, st, onClose }) {
           <input id="ps_desc" value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} />
         </div>
         <label className="check">
-          <input type="checkbox" checked={v.employerPf} onChange={(e) => setV({ ...v, employerPf: e.target.checked })} /> Employer PF is part of the CTC
+          <input type="checkbox" checked={v.employerPf} onChange={(e) => setV({ ...v, employerPf: e.target.checked })} /> Employer PF is part of the CTC (untick if the company pays it on top)
         </label>
         <label className="check">
           <input type="checkbox" checked={v.gratuity} onChange={(e) => setV({ ...v, gratuity: e.target.checked })} /> Gratuity is part of the CTC
@@ -2111,6 +2192,10 @@ function StructureEditor({ db, st, onClose }) {
           </tr>
         </tbody>
       </table>
+      {(() => {
+        const w = wageShare(preview.earnings, wagePolicy(db));
+        return <p className={w.below ? 'pr-warn' : 'pr-muted'} style={{ marginTop: 10 }}>{`Wages are ${w.pct.toFixed(1)}% of pay at this CTC (rule: at least ${wagePolicy(db).minPct}%${wagePolicy(db).enabled === false ? ', switched off' : ''}).${w.below ? ' Raise basic or take components off the exclusion list in Settings > Wage rule.' : ''}`}</p>;
+      })()}
       {balance >= 0 && preview.earnings[balance][1] === 0 && Number(sample) > 0 && <p className="pr-muted">The other components already use the whole CTC, so the balance component is zero.</p>}
       {balance < 0 && <p className="pr-muted">No balance component: gross pay may come out below the CTC less employer costs.</p>}
       {error && <p className="form-error">{error}</p>}
@@ -2153,6 +2238,7 @@ function PayStructures({ db }) {
         columns={[
           { key: 'name', label: 'Structure', render: (s) => (<span>{s.name}{s.isDefault && <> <Badge tone="blue">Default</Badge></>}</span>) },
           { key: 'components', label: 'Components', sortable: false, render: (s) => s.components.map((c) => c.name).join(', ') },
+          { key: 'wages', label: 'Wages share', sortable: false, render: (s) => { const w = wageShare(salaryBreakup(1200000, { ...db.payrollSettings, pf: pfPolicy(db) }, s).earnings, wagePolicy(db)); return <span>{w.pct.toFixed(0)}% {w.below && <Badge tone="amber">Below {wagePolicy(db).minPct}%</Badge>}</span>; } },
           { key: 'pf', label: 'Employer PF', sortable: false, render: (s) => (s.employerPf === false ? 'No' : 'Yes') },
           { key: 'grat', label: 'Gratuity', sortable: false, render: (s) => (s.gratuity === false ? 'No' : `${s.gratuityPct ?? 4.81}% of basic`) },
           { key: 'people', label: 'Employees', sortable: false, render: users },
@@ -2183,7 +2269,419 @@ function PayStructures({ db }) {
   );
 }
 
-function PayrollSettings({ db }) {
+// ---------- settings: gratuity on exit ----------
+const GRATUITY_FIELDS = [
+  { key: 'enabled', label: 'Use gratuity in this company', type: 'checkbox', help: 'Switch off if you do not give gratuity. Nothing is set aside in the CTC and nothing is paid on exit. Your settings below are kept.' },
+  { key: 'eligibility', label: 'Who gets gratuity', type: 'select', options: [{ value: 'all', label: 'Everyone, once they have the years of service' }, { value: 'selected', label: 'Only the employees I choose' }], placeholder: 'Everyone', section: 'Who gets it', show: (v) => v.enabled !== false },
+  { key: 'eligible', label: 'Employees who get gratuity', type: 'employeesearch', full: true, show: (v) => v.enabled !== false && v.eligibility === 'selected', help: 'Only the people added here have gratuity in their CTC and get it on exit. Anyone who joins later is left out until you add them here or set Gratuity applies on their profile. The years of service below still apply to them.' },
+  { key: 'daysPerYear', label: 'Days of wages for each year of service', type: 'number', min: 1, section: 'Formula', help: 'The Act says 15.', show: (v) => v.enabled !== false },
+  { key: 'monthDays', label: 'Days in a month for this calculation', type: 'number', min: 1, help: 'A month’s wages are divided by this to get a day’s wages. The Act says 26.', show: (v) => v.enabled !== false },
+  { key: 'roundMonths', label: 'A part-year counts as a full year from (months)', type: 'number', min: 1, max: 12, help: '6 means 7 years 6 months is paid as 8 years. Use 12 to pay completed years only.', show: (v) => v.enabled !== false },
+  { key: 'minYears', label: 'Years of service needed: permanent staff', type: 'number', min: 0, step: 0.5, section: 'Years of service needed', help: 'Nothing is paid below this. The Act says 5.', show: (v) => v.enabled !== false },
+  { key: 'minYearsFixedTerm', label: 'Years of service needed: Contract (fixed-term) staff', type: 'number', min: 0, step: 0.5, help: 'Applies to anyone whose worker type is Contract.', show: (v) => v.enabled !== false },
+  { key: 'cap', label: 'Most that can be paid (₹)', type: 'number', min: 0, section: 'Limit', help: 'The Act says ₹20,00,000. Enter 0 for no limit.', show: (v) => v.enabled !== false },
+];
+
+function GratuitySettings({ db }) {
+  const saved = gratuityPolicy(db);
+  // The list starts empty when everyone has gratuity; once "only chosen employees" is saved it holds those marked Yes.
+  const eligibleNow = saved.eligibility === 'selected' ? db.employees.filter((e) => e.status !== 'Exited' && e.gratuityApplies === 'Yes').map((e) => e.id) : [];
+  const [v, setV] = useState({ ...saved, eligible: eligibleNow });
+  const [ex, setEx] = useState({ basic: 30000, years: 7.6 });
+  const num = (k) => (k === 'enabled' ? v.enabled !== false : k === 'eligibility' ? (v.eligibility === 'selected' ? 'selected' : 'all') : v[k] === '' || v[k] === undefined ? GRATUITY_DEFAULTS[k] : Number(v[k]));
+  const draft = Object.fromEntries(Object.keys(GRATUITY_DEFAULTS).map((k) => [k, num(k)]));
+  const on = draft.enabled;
+  const picked = v.eligible || [];
+  const pickedChanged = draft.eligibility === 'selected' && (picked.length !== eligibleNow.length || picked.some((id) => !eligibleNow.includes(id)));
+  const changed = Object.keys(GRATUITY_DEFAULTS).some((k) => draft[k] !== saved[k]) || pickedChanged;
+  const isDefault = Object.keys(GRATUITY_DEFAULTS).every((k) => k === 'enabled' || k === 'eligibility' || draft[k] === GRATUITY_DEFAULTS[k]);
+  const save = () => {
+    if (on && (!(draft.daysPerYear > 0) || !(draft.monthDays > 0))) return toast('Days of wages and days in a month must be more than zero.', 'error');
+    if (on && (draft.roundMonths < 1 || draft.roundMonths > 12)) return toast('The rounding month must be between 1 and 12.', 'error');
+    if (on && (draft.minYears < 0 || draft.minYearsFixedTerm < 0 || draft.cap < 0)) return toast('Years and the limit cannot be negative.', 'error');
+    update((d) => {
+      d.payrollSettings.gratuityPolicy = draft;
+      // The list is kept on each employee's profile (Gratuity applies), so the two always agree.
+      if (on && draft.eligibility === 'selected') {
+        d.employees.forEach((e) => {
+          if (e.status === 'Exited') return;
+          if (picked.includes(e.id)) e.gratuityApplies = 'Yes';
+          else if (e.gratuityApplies === 'Yes') e.gratuityApplies = '';
+        });
+      }
+    });
+    setV({ ...draft, eligible: picked });
+    toast('Gratuity settings saved');
+  };
+  const reset = () => setV({ ...GRATUITY_DEFAULTS, enabled: v.enabled !== false, eligibility: draft.eligibility, eligible: picked });
+  const demoYears = Number(ex.years) || 0;
+  const demoBasic = Number(ex.basic) || 0;
+  const r = gratuityPayable(draft, demoBasic, demoYears, 'Permanent');
+  const f = gratuityPayable(draft, demoBasic, demoYears, 'Contract');
+  const accrual = ((draft.daysPerYear / draft.monthDays / 12) * 100).toFixed(2);
+  return (
+    <Panel
+      title="Gratuity on exit"
+      right={
+        <span className="row">
+          <Btn kind="ghost" small onClick={reset} disabled={isDefault}>Use the Act’s formula</Btn>
+          <Btn small onClick={save} disabled={!changed}>Save</Btn>
+        </span>
+      }
+    >
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        {!on ? 'Gratuity is switched off. Nothing is set aside in the CTC and nothing is paid on exit. Your values below are kept for when you switch it on again.' : <>Gratuity paid in the full and final settlement = <strong>{draft.daysPerYear} ÷ {draft.monthDays} × last monthly basic × years of service</strong>
+        {draft.cap > 0 ? <>, up to {money(draft.cap)}</> : <>, with no upper limit</>}. {draft.eligibility === 'selected' ? <>{picked.length ? `Only the ${picked.length} employee(s) chosen below get it. ` : 'No one is chosen yet, so no one gets it. Add employees below. '}</> : <>Everyone gets it. </>}It starts after {draft.minYears} year(s) of service, or {draft.minYearsFixedTerm} for Contract staff. {isDefault ? 'These are the standard values from the Payment of Gratuity Act.' : 'These differ from the Act’s standard values.'}</>}
+      </p>
+      <FormGrid fields={GRATUITY_FIELDS} values={v} setValues={setV} db={db} />
+      {on && (
+      <>
+      <h4 className="form-section" style={{ marginTop: 18 }}>Try it</h4>
+      <FormGrid fields={[{ key: 'basic', label: 'Monthly basic (₹)', type: 'number' }, { key: 'years', label: 'Years of service', type: 'number', step: 0.1 }]} values={ex} setValues={setEx} db={db} />
+      <p style={{ marginTop: 10 }}>
+        Permanent: <strong>{money(Math.round(r.amount))}</strong> {r.amount ? `(${r.countedYears} years counted${r.capped ? ', limited by the cap' : ''})` : `(needs ${r.minYears} years)`}
+        {' · '}
+        Contract: <strong>{money(Math.round(f.amount))}</strong> {f.amount ? `(${f.countedYears} years counted${f.capped ? ', limited by the cap' : ''})` : `(needs ${f.minYears} years)`}
+      </p>
+      <p className="pr-muted" style={{ marginTop: 12 }}>
+        The monthly amount set aside inside the CTC is separate. It is the percentage of basic on each Pay structure (the formula above works out to {accrual}%). An employee can also be switched off or on under Statutory on their profile.
+      </p>
+      </>
+      )}
+    </Panel>
+  );
+}
+
+// ---------- settings: provident fund and ESI ----------
+const MONTH_OPTIONS = MONTHS.map((m, i) => ({ value: String(i + 1), label: m }));
+const PF_FIELDS = [
+  { key: 'basis', label: 'PF is worked out on', type: 'select', options: [{ value: 'capped', label: 'Basic up to the wage ceiling' }, { value: 'actual', label: 'The full basic' }], section: 'Provident Fund', help: 'The company default. An employee can choose differently on their profile under Statutory.' },
+  { key: 'employeeRate', label: 'Employee share (% of PF wage)', type: 'number', min: 0, max: 100, step: 0.01, section: 'Rates' },
+  { key: 'employerRate', label: 'Employer share in all (% of PF wage)', type: 'number', min: 0, max: 100, step: 0.01 },
+  { key: 'epsRate', label: 'Of this, pension fund / EPS (%)', type: 'number', min: 0, max: 100, step: 0.01, help: 'On wages up to the ceiling. The rest of the employer share goes to EPF.' },
+  { key: 'edliRate', label: 'EDLI insurance, paid by employer (%)', type: 'number', min: 0, max: 100, step: 0.01 },
+  { key: 'adminRate', label: 'EPF administration charge, paid by employer (%)', type: 'number', min: 0, max: 100, step: 0.01 },
+  { key: 'adminMin', label: 'Administration charge: least for the whole month (₹)', type: 'number', min: 0 },
+  { key: 'chargesInCtc', label: 'EDLI and administration charges come out of the CTC', type: 'checkbox', help: 'Off means the company pays them on top of the CTC and nobody’s pay changes. The employer’s PF share itself follows each pay structure (“Employer PF is part of the CTC”).' },
+];
+const ESI_FIELDS = [
+  { key: 'enabled', label: 'Use ESI in this company', type: 'checkbox', help: 'Switch off if no one is covered. Your values below are kept. A pay group can also switch ESI off for its own people.' },
+  { key: 'grossLimit', label: 'Covered if monthly wages are up to (₹)', type: 'number', min: 1, section: 'Who is covered', show: (v) => v.enabled !== false },
+  { key: 'employeeRate', label: 'Employee share (% of wages)', type: 'number', min: 0, max: 100, step: 0.01, section: 'Rates', show: (v) => v.enabled !== false },
+  { key: 'employerRate', label: 'Employer share (% of wages)', type: 'number', min: 0, max: 100, step: 0.01, show: (v) => v.enabled !== false },
+  { key: 'periodStart1', label: 'First contribution period starts in', type: 'select', options: MONTH_OPTIONS, section: 'Contribution periods', show: (v) => v.enabled !== false },
+  { key: 'periodStart2', label: 'Second contribution period starts in', type: 'select', options: MONTH_OPTIONS, help: 'Whether someone is covered is decided on their wages in the first month of the period they work in, and stays for the whole period even if pay rises past the limit. The law has April and October.', show: (v) => v.enabled !== false },
+];
+
+function PfEsiSettings({ db }) {
+  const savedPf = pfPolicy(db);
+  const savedEsi = esiPolicy(db);
+  const [pf, setPf] = useState({ ...savedPf });
+  const [esi, setEsi] = useState({ ...savedEsi, periodStart1: String(savedEsi.periodStart1), periodStart2: String(savedEsi.periodStart2) });
+  const [ex, setEx] = useState({ basic: 30000 });
+  const n = (x, d) => (x === '' || x === undefined || x === null ? d : Number(x));
+  const pfDraft = {
+    ...Object.fromEntries(['employeeRate', 'employerRate', 'epsRate', 'edliRate', 'adminRate', 'adminMin'].map((k) => [k, n(pf[k], PF_DEFAULTS[k])])),
+    basis: pf.basis === 'actual' ? 'actual' : 'capped',
+    chargesInCtc: !!pf.chargesInCtc,
+    rules: (pf.rules || []).map((r) => ({ from: r.from || '', ceiling: r.ceiling === '' ? '' : Number(r.ceiling) })),
+  };
+  const esiDraft = {
+    enabled: esi.enabled !== false,
+    ...Object.fromEntries(['grossLimit', 'employeeRate', 'employerRate'].map((k) => [k, n(esi[k], ESI_DEFAULTS[k])])),
+    periodStart1: n(esi.periodStart1, ESI_DEFAULTS.periodStart1),
+    periodStart2: n(esi.periodStart2, ESI_DEFAULTS.periodStart2),
+  };
+  const key = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
+  const pfOnly = (o) => ({ ...Object.fromEntries(['employeeRate', 'employerRate', 'epsRate', 'edliRate', 'adminRate', 'adminMin', 'basis', 'chargesInCtc'].map((k) => [k, o[k]])), rules: o.rules.map((r) => [r.from, r.ceiling]) });
+  const esiOnly = (o) => Object.fromEntries(['enabled', 'grossLimit', 'employeeRate', 'employerRate'].map((k) => [k, o[k]]).concat([['periodStart1', Number(o.periodStart1)], ['periodStart2', Number(o.periodStart2)]]));
+  const changed = key(pfOnly(pfDraft)) !== key(pfOnly(savedPf)) || key(esiOnly(esiDraft)) !== key(esiOnly(savedEsi));
+  const isDefault = key(pfOnly(pfDraft)) === key(pfOnly(PF_DEFAULTS)) && key({ ...esiOnly(esiDraft), enabled: true }) === key(esiOnly(ESI_DEFAULTS));
+  const setRule = (i, patch) => setPf({ ...pf, rules: pf.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const save = () => {
+    const bad = [...['employeeRate', 'employerRate', 'epsRate', 'edliRate', 'adminRate'].map((k) => pfDraft[k]), esiDraft.employeeRate, esiDraft.employerRate].some((x) => !(x >= 0 && x <= 100));
+    if (bad) return toast('Every rate must be between 0 and 100.', 'error');
+    if (pfDraft.epsRate > pfDraft.employerRate) return toast('The pension share cannot be more than the employer share.', 'error');
+    if (pfDraft.adminMin < 0) return toast('The minimum administration charge cannot be negative.', 'error');
+    if (!pfDraft.rules.length || pfDraft.rules.some((r) => !r.from || !(r.ceiling > 0))) return toast('Every wage ceiling needs a date and an amount.', 'error');
+    if (new Set(pfDraft.rules.map((r) => r.from)).size !== pfDraft.rules.length) return toast('Two wage ceilings start on the same day.', 'error');
+    if (esiDraft.enabled && !(esiDraft.grossLimit > 0)) return toast('The ESI wage limit must be more than zero.', 'error');
+    const rules = [...pfDraft.rules].sort((a, b) => a.from.localeCompare(b.from));
+    update((d) => {
+      d.payrollSettings.pfPolicy = { ...pfDraft, rules };
+      d.payrollSettings.esiPolicy = esiDraft;
+    });
+    setPf({ ...pfDraft, rules });
+    toast('PF and ESI settings saved');
+  };
+  const reset = () => {
+    setPf({ ...PF_DEFAULTS, rules: PF_DEFAULTS.rules.map((r) => ({ ...r })) });
+    setEsi({ ...ESI_DEFAULTS, enabled: esi.enabled !== false, periodStart1: String(ESI_DEFAULTS.periodStart1), periodStart2: String(ESI_DEFAULTS.periodStart2) });
+  };
+  const demoBasic = Number(ex.basic) || 0;
+  const today = pfCeilingOn(pfDraft);
+  const sample = pfOf(pfDraft, { basic: demoBasic, ceiling: today, basis: pfDraft.basis });
+  return (
+    <Panel
+      title="Provident Fund and ESI"
+      right={
+        <span className="row">
+          <Btn kind="ghost" small onClick={reset} disabled={isDefault}>Use the statutory values</Btn>
+          <Btn small onClick={save} disabled={!changed}>Save</Btn>
+        </span>
+      }
+    >
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        The values start as the ones the law sets and you can change any of them. Months already locked keep the figures they were paid with. Who is covered is set per pay group (Pay groups) and per employee (profile, Statutory).
+      </p>
+      <FormGrid fields={PF_FIELDS} values={pf} setValues={setPf} db={db} />
+      <h4 className="form-section" style={{ marginTop: 18 }}>PF wage ceiling over time</h4>
+      <p className="pr-muted" style={{ marginBottom: 10 }}>
+        The ceiling that applies from each date. A pay cycle that holds the day a new ceiling starts uses each day’s own ceiling and the average of them. In force today: <strong>{money(today)}</strong>. A pay group can set a ceiling of its own instead.
+      </p>
+      {(pf.rules || []).map((r, i) => (
+        <div className="row" key={i} style={{ gap: 12, alignItems: 'flex-end', marginBottom: 8, flexWrap: 'wrap' }}>
+          <div className="field" style={{ minWidth: 170 }}>
+            <label>From</label>
+            <input type="date" value={r.from || ''} onChange={(e) => setRule(i, { from: e.target.value })} />
+          </div>
+          <div className="field" style={{ minWidth: 170 }}>
+            <label>Wage ceiling (₹)</label>
+            <input type="number" min="1" value={r.ceiling ?? ''} onChange={(e) => setRule(i, { ceiling: e.target.value === '' ? '' : Number(e.target.value) })} />
+          </div>
+          <Btn kind="icon" icon="trash" title="Remove" aria-label="Remove this ceiling" disabled={(pf.rules || []).length <= 1} onClick={() => setPf({ ...pf, rules: pf.rules.filter((_, j) => j !== i) })} />
+        </div>
+      ))}
+      <Btn kind="ghost" small icon="plus" onClick={() => setPf({ ...pf, rules: [...(pf.rules || []), { from: '', ceiling: '' }] })}>Add a ceiling</Btn>
+      <h4 className="form-section" style={{ marginTop: 18 }}>Try it</h4>
+      <FormGrid fields={[{ key: 'basic', label: 'Monthly basic (₹)', type: 'number' }]} values={ex} setValues={setEx} db={db} />
+      <p style={{ marginTop: 10 }}>
+        PF wage <strong>{money(sample.wage)}</strong>. Employee <strong>{money(Math.round(sample.employee))}</strong>. Employer <strong>{money(Math.round(sample.employer))}</strong> = EPS {money(Math.round(sample.eps))} + EPF {money(Math.round(sample.employer) - Math.round(sample.eps))}. EDLI {money(Math.round(sample.edli))}, administration {money(Math.round(sample.admin))}.
+      </p>
+      <h4 className="form-section" style={{ marginTop: 22 }}>Employees’ State Insurance</h4>
+      <FormGrid fields={ESI_FIELDS} values={esi} setValues={setEsi} db={db} />
+    </Panel>
+  );
+}
+
+// ---------- settings: who approves payroll ----------
+const APPROVAL_FIELDS = [
+  { key: 'separate', label: 'A different person approves payroll', type: 'checkbox', help: 'Off: whoever processes payroll can lock it, and an admin can unlock it by giving a reason. On: the person who processes submits it, and someone else approves it. Approval is what locks the month, and unlocking also needs their approval.' },
+  { key: 'approvers', label: 'Payroll approvers', type: 'employeesearch', full: true, show: (v) => !!v.separate, help: 'Anyone can be chosen, not only admins. Leave it empty to let every admin approve. The person who submitted a month or asked to unlock it can never be the one to approve it.' },
+];
+
+function ApprovalSettings({ db, user }) {
+  const saved = approvalPolicy(db);
+  const [v, setV] = useState({ separate: saved.separate, approvers: saved.approvers });
+  const same = (a, b) => !!a.separate === !!b.separate && JSON.stringify([...(a.approvers || [])].sort()) === JSON.stringify([...(b.approvers || [])].sort());
+  const save = () => {
+    let res;
+    update((d) => {
+      res = saveApprovalSettings(d, user, v);
+    });
+    if (!res.ok) return toast(res.error, 'error');
+    toast('Approval settings saved');
+  };
+  const pending = (db.payrollRuns || []).filter((r) => r.status === 'Submitted').length;
+  const eligible = approverIds({ ...db, payrollSettings: { ...db.payrollSettings, approval: { separate: true, approvers: v.approvers || [] } } });
+  return (
+    <Panel title="Payroll approval" right={<Btn small onClick={save} disabled={same(v, saved)}>Save</Btn>}>
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        {v.separate ? <>Payroll is submitted by the person who processes it and locked when an approver approves it. Approvers: <strong>{eligible.map((id) => fullName(empById(db, id))).join(', ') || 'none'}</strong>{(v.approvers || []).length === 0 ? ' (every admin)' : ''}. Each approver gets an item in their Inbox.</> : 'Payroll is locked directly by whoever processes it. Admins have full access, and unlocking asks for a reason that is logged.'}
+      </p>
+      {saved.separate && !v.separate && pending > 0 && <p className="pr-warn" style={{ marginBottom: 12 }}>{pending} month(s) are waiting for approval. Switching approval off sends them back to Processed so they can be locked directly.</p>}
+      <FormGrid fields={APPROVAL_FIELDS} values={v} setValues={setV} db={db} />
+    </Panel>
+  );
+}
+
+// ---------- settings: Professional Tax and Labour Welfare Fund ----------
+const LWF_FIELDS = [
+  { key: 'frequency', label: 'Paid', type: 'select', options: [{ value: 'yearly', label: 'Once a year' }, { value: 'half-yearly', label: 'Twice a year (half-yearly)' }], section: 'Labour Welfare Fund', help: 'The amounts are set on each pay group. They are taken only in the months below, not every month.' },
+  { key: 'month', label: 'Taken in', type: 'select', options: MONTH_OPTIONS, help: 'Tamil Nadu: yearly, due by 31 January, so December payroll. For half-yearly this is the second of the two months and the other is six months before it.' },
+];
+
+function PtLwfSettings({ db }) {
+  const savedPt = ptPolicy(db);
+  const state = savedPt.defaultState;
+  const [slabs, setSlabs] = useState((savedPt.states[state]?.slabs || []).map((r) => ({ ...r })));
+  const savedLwf = lwfPolicy(db);
+  const [lwf, setLwf] = useState({ frequency: savedLwf.frequency, month: String(savedLwf.month) });
+  const [ex, setEx] = useState({ gross: 40000 });
+  const clean = slabs.map((r) => ({ upTo: r.upTo === '' || r.upTo === null || r.upTo === undefined ? null : Number(r.upTo), amount: Number(r.amount) || 0 }));
+  const lwfDraft = { frequency: lwf.frequency === 'half-yearly' ? 'half-yearly' : 'yearly', month: Number(lwf.month) || 12 };
+  const key = (o) => JSON.stringify(o);
+  const changed = key(clean) !== key(savedPt.states[state]?.slabs || []) || key(lwfDraft) !== key({ frequency: savedLwf.frequency, month: Number(savedLwf.month) });
+  const isDefault = key(clean) === key(PT_DEFAULTS.states['Tamil Nadu'].slabs) && key(lwfDraft) === key(LWF_DEFAULTS);
+  const set = (i, patch) => setSlabs(slabs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const save = () => {
+    const limited = clean.filter((r) => r.upTo !== null);
+    if (!clean.length) return toast('Add at least one slab.', 'error');
+    if (clean.some((r) => r.amount < 0 || (r.upTo !== null && !(r.upTo > 0)))) return toast('Amounts and limits must be positive.', 'error');
+    if (limited.some((r, i) => i > 0 && r.upTo <= limited[i - 1].upTo)) return toast('Each limit must be higher than the one before.', 'error');
+    if (clean.findIndex((r) => r.upTo === null) !== -1 && clean.findIndex((r) => r.upTo === null) !== clean.length - 1) return toast('The slab with no limit must be the last one.', 'error');
+    update((d) => {
+      const cur = ptPolicy(d);
+      d.payrollSettings.ptPolicy = { defaultState: cur.defaultState, states: { ...cur.states, [cur.defaultState]: { slabs: clean } } };
+      d.payrollSettings.lwfPolicy = lwfDraft;
+    });
+    toast('PT and LWF settings saved');
+  };
+  const reset = () => {
+    setSlabs(PT_DEFAULTS.states['Tamil Nadu'].slabs.map((r) => ({ ...r })));
+    setLwf({ frequency: LWF_DEFAULTS.frequency, month: String(LWF_DEFAULTS.month) });
+  };
+  const preview = { ...savedPt, states: { ...savedPt.states, [state]: { slabs: clean } } };
+  const g = Number(ex.gross) || 0;
+  const half = ptHalfYear(preview, state, g);
+  return (
+    <Panel
+      title="Professional Tax and Labour Welfare Fund"
+      right={
+        <span className="row">
+          <Btn kind="ghost" small onClick={reset} disabled={isDefault}>Use the Tamil Nadu values</Btn>
+          <Btn small onClick={save} disabled={!changed}>Save</Btn>
+        </span>
+      }
+    >
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        Professional Tax for <strong>{state}</strong> (the company’s state) is charged on half-yearly income and taken monthly: a sixth of the half-yearly amount each month, with September and March making the total exact. Check the slab amounts with your CA. Months already locked keep what they were paid with. An employee who works in another state can be given a work state on their profile once that state’s slabs are added.
+      </p>
+      <h4 className="form-section">Slabs — half-yearly income</h4>
+      {slabs.map((r, i) => (
+        <div className="row" key={i} style={{ gap: 12, alignItems: 'flex-end', marginBottom: 8, flexWrap: 'wrap' }}>
+          <div className="field" style={{ minWidth: 200 }}>
+            <label>Income up to (₹)</label>
+            <input type="number" min="1" placeholder="No limit" value={r.upTo ?? ''} onChange={(e) => set(i, { upTo: e.target.value === '' ? null : Number(e.target.value) })} />
+          </div>
+          <div className="field" style={{ minWidth: 200 }}>
+            <label>Tax for the half-year (₹)</label>
+            <input type="number" min="0" value={r.amount ?? ''} onChange={(e) => set(i, { amount: e.target.value === '' ? '' : Number(e.target.value) })} />
+          </div>
+          <Btn kind="icon" icon="trash" title="Remove" aria-label="Remove this slab" disabled={slabs.length <= 1} onClick={() => setSlabs(slabs.filter((_, j) => j !== i))} />
+        </div>
+      ))}
+      <Btn kind="ghost" small icon="plus" onClick={() => setSlabs([...slabs, { upTo: '', amount: '' }])}>Add a slab</Btn>
+      <h4 className="form-section" style={{ marginTop: 18 }}>Try it</h4>
+      <FormGrid fields={[{ key: 'gross', label: 'Monthly gross (₹)', type: 'number' }]} values={ex} setValues={setEx} db={db} />
+      <p style={{ marginTop: 10 }}>
+        Half-yearly income <strong>{money(g * 6)}</strong> → tax for the half-year <strong>{money(half)}</strong>. Deducted <strong>{money(ptMonthly(preview, state, g, '2026-11'))}</strong> a month, and <strong>{money(ptMonthly(preview, state, g, '2027-03'))}</strong> in September and March.
+      </p>
+      <FormGrid fields={LWF_FIELDS} values={lwf} setValues={setLwf} db={db} />
+    </Panel>
+  );
+}
+
+// ---------- settings: the wage rule ----------
+function WageRuleSettings({ db }) {
+  const saved = wagePolicy(db);
+  const names = [...new Set([...(db.payStructures || []).flatMap((st) => st.components.slice(1).map((c) => c.name)), ...saved.exclusions])];
+  const [v, setV] = useState({ enabled: saved.enabled !== false, minPct: saved.minPct, exclusions: [...saved.exclusions] });
+  const draft = { enabled: !!v.enabled, minPct: v.minPct === '' ? '' : Number(v.minPct), exclusions: v.exclusions || [] };
+  const changed = JSON.stringify(draft) !== JSON.stringify({ enabled: saved.enabled !== false, minPct: saved.minPct, exclusions: saved.exclusions });
+  const save = () => {
+    if (draft.enabled && !(draft.minPct > 0 && draft.minPct <= 100)) return toast('The share must be between 1 and 100.', 'error');
+    update((d) => {
+      d.payrollSettings.wagePolicy = { ...draft, minPct: draft.minPct === '' ? WAGE_DEFAULTS.minPct : draft.minPct };
+    });
+    toast('Wage rule saved');
+  };
+  const fields = [
+    { key: 'enabled', label: 'Warn when wages are below the share', type: 'checkbox', help: 'The labour codes want wages (basic and similar pay) to be at least a set share of total pay. A pay structure that falls short is flagged. Nothing is blocked.' },
+    { key: 'minPct', label: 'Wages must be at least this share of total pay (%)', type: 'number', min: 1, max: 100, show: (x) => x.enabled },
+    { key: 'exclusions', label: 'Pay components that are not counted as wages', type: 'multiselect', full: true, options: names.map((n) => ({ value: n, label: n })), show: (x) => x.enabled, help: 'Basic always counts. Tick the allowances the law lets you leave out of wages (for example HRA or conveyance). Components you add to a pay structure later appear here.' },
+  ];
+  return (
+    <Panel title="Wage rule" right={<Btn small onClick={save} disabled={!changed}>Save</Btn>}>
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        Total pay is the earnings in a pay structure; employer PF and gratuity are not part of it. This only warns for now: PF and gratuity are still worked out on basic, as set under PF & ESI and Gratuity. The Pay structures tab shows each structure’s wages share at ₹12 lakh CTC.
+      </p>
+      <FormGrid fields={fields} values={v} setValues={setV} db={db} />
+    </Panel>
+  );
+}
+
+// ---------- settings: full and final ----------
+const EXIT_FIELDS = [
+  { key: 'encashEnabled', label: 'Pay out unused leave on exit', type: 'checkbox', section: 'Leave encashment', help: 'Applies to the leave types marked encashable under Leave settings.' },
+  { key: 'encashBasis', label: 'A day’s pay is worked out from', type: 'select', options: [{ value: 'basic', label: 'Basic' }, { value: 'gross', label: 'Gross pay' }], show: (v) => v.encashEnabled },
+  { key: 'encashDivisor', label: 'Divided by this many days a month', type: 'number', min: 1, show: (v) => v.encashEnabled },
+  { key: 'encashMaxDays', label: 'Most days paid out (0 for no limit)', type: 'number', min: 0, show: (v) => v.encashEnabled },
+  { key: 'noticeBasis', label: 'A day’s pay is worked out from', type: 'select', options: [{ value: 'basic', label: 'Basic' }, { value: 'gross', label: 'Gross pay' }], section: 'Notice shortfall recovery', help: 'Taken when someone leaves before their notice period ends. An admin can waive it for an exit.' },
+  { key: 'noticeDivisor', label: 'Divided by this many days a month', type: 'number', min: 1 },
+  { key: 'noticeCapDays', label: 'Most days recovered (0 for no limit)', type: 'number', min: 0 },
+];
+function ExitSettings({ db }) {
+  const saved = exitPolicy(db);
+  const [v, setV] = useState({ ...saved });
+  const num = (k) => (v[k] === '' || v[k] === undefined ? EXIT_DEFAULTS[k] : Number(v[k]));
+  const draft = { encashEnabled: !!v.encashEnabled, encashBasis: v.encashBasis === 'gross' ? 'gross' : 'basic', encashDivisor: num('encashDivisor'), encashMaxDays: num('encashMaxDays'), noticeBasis: v.noticeBasis === 'basic' ? 'basic' : 'gross', noticeDivisor: num('noticeDivisor'), noticeCapDays: num('noticeCapDays') };
+  const changed = JSON.stringify(draft) !== JSON.stringify(saved);
+  const save = () => {
+    if (!(draft.encashDivisor > 0) || !(draft.noticeDivisor > 0)) return toast('Days in a month must be more than zero.', 'error');
+    if (draft.encashMaxDays < 0 || draft.noticeCapDays < 0) return toast('Limits cannot be negative.', 'error');
+    update((d) => {
+      d.payrollSettings.exitPolicy = draft;
+    });
+    toast('Full and final settings saved');
+  };
+  return (
+    <Panel title="Full and final settlement" right={<span className="row"><Btn kind="ghost" small onClick={() => setV({ ...EXIT_DEFAULTS })} disabled={JSON.stringify(draft) === JSON.stringify(EXIT_DEFAULTS)}>Use the standard values</Btn><Btn small onClick={save} disabled={!changed}>Save</Btn></span>}>
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        How leave encashment and notice recovery are worked out when someone leaves. Gratuity has its own tab. Settlements that are already added to payroll keep their amounts.
+      </p>
+      <FormGrid fields={EXIT_FIELDS} values={v} setValues={setV} db={db} />
+    </Panel>
+  );
+}
+
+// ---------- settings: payslip email ----------
+const MAIL_FIELDS = [
+  { key: 'enabled', label: 'The mail service is connected', type: 'checkbox', section: 'Mail service (SMTP)', help: 'Tick this once SMTP is set up. Until then payslips wait in the outbox below and nothing is sent. The SMTP password is not stored here; it belongs with the mail service.' },
+  { key: 'host', label: 'SMTP server' },
+  { key: 'port', label: 'Port', type: 'number' },
+  { key: 'security', label: 'Security', type: 'select', options: ['STARTTLS', 'SSL/TLS', 'None'] },
+  { key: 'user', label: 'User name' },
+  { key: 'fromName', label: 'Sent from (name)', section: 'Message' },
+  { key: 'fromEmail', label: 'Sent from (email)', type: 'email' },
+  { key: 'subject', label: 'Subject', full: true, help: 'Use {month} and {name}.' },
+  { key: 'body', label: 'Message', type: 'textarea', full: true, help: 'Use {month} and {name}. The payslip is attached as a PDF that opens with the employee number followed by the date of birth (DDMMYYYY).' },
+];
+function MailSettings({ db }) {
+  const saved = mailSettings(db);
+  const [v, setV] = useState({ ...saved });
+  const changed = JSON.stringify({ ...saved, port: Number(v.port) || saved.port }) !== JSON.stringify({ ...v, port: Number(v.port) || saved.port }) || JSON.stringify(v) !== JSON.stringify(saved);
+  const save = () => {
+    update((d) => {
+      d.payrollSettings.mail = { ...MAIL_DEFAULTS, ...v, port: Number(v.port) || 587 };
+    });
+    toast('Payslip email settings saved');
+  };
+  const outbox = db.payslipOutbox || [];
+  const waiting = outbox.filter((x) => x.status !== 'Sent').length;
+  return (
+    <Panel title="Payslip email" right={<Btn small onClick={save} disabled={!changed}>Save</Btn>}>
+      <p className="pr-muted" style={{ marginBottom: 12 }}>
+        When payroll is released, each employee’s payslip is put in the outbox below, to be emailed as a password-protected PDF. {smtpReady(saved) ? 'The mail service is marked as connected, so new payslips are queued for sending.' : 'The mail service is not connected yet, so they wait in the outbox. Nothing is sent from the browser.'} {waiting} waiting.
+      </p>
+      <FormGrid fields={MAIL_FIELDS} values={v} setValues={setV} db={db} />
+      <h4 className="form-section" style={{ marginTop: 18 }}>Outbox</h4>
+      <DataTable
+        rows={outbox.slice(0, 100)}
+        empty="Nothing in the outbox yet. Payslips are added when you release payroll."
+        pageSize={10}
+        columns={[
+          { key: 'emp', label: 'Employee', sortable: false, render: (x) => fullName(empById(db, x.empId)) },
+          { key: 'to', label: 'To' },
+          { key: 'month', label: 'Payslip for', render: (x) => monthLabel(x.month) },
+          { key: 'status', label: 'Status', render: (x) => <Badge tone={x.status === 'Sent' ? 'green' : x.status === 'No email address' ? 'red' : 'amber'}>{x.status}</Badge> },
+        ]}
+      />
+    </Panel>
+  );
+}
+
+function PayrollSettings({ db, user }) {
   const [tab, setTab] = useState('cycle');
   const [v, setV] = useState({ cycleStartDay: db.payrollSettings.cycleStartDay });
   const save = () => {
@@ -2192,7 +2690,7 @@ function PayrollSettings({ db }) {
   };
   return (
     <div className="pr-stack">
-      <Tabs tabs={[{ key: 'cycle', label: 'Pay cycle' }, { key: 'groups', label: 'Pay groups' }, { key: 'structures', label: 'Pay structures' }]} active={tab} onChange={setTab} />
+      <Tabs tabs={[{ key: 'cycle', label: 'Pay cycle' }, { key: 'groups', label: 'Pay groups' }, { key: 'structures', label: 'Pay structures' }, { key: 'pfesi', label: 'PF & ESI' }, { key: 'ptlwf', label: 'PT & LWF' }, { key: 'wage', label: 'Wage rule' }, { key: 'exit', label: 'Full & final' }, { key: 'mail', label: 'Payslip email' }, { key: 'gratuity', label: 'Gratuity' }, { key: 'approval', label: 'Approval' }]} active={tab} onChange={setTab} />
       {tab === 'cycle' && (
         <Panel title="Pay cycle" right={<Btn small onClick={save}>Save</Btn>}>
           <FormGrid fields={[{ key: 'cycleStartDay', label: 'Pay cycle starts on day', type: 'number', min: 1, max: 28, help: '26 means November payroll covers 26 Oct – 25 Nov. Use 1 for calendar months. Attendance uses the same cycle, so it is also shown in Attendance settings.' }]} values={v} setValues={setV} db={db} />
@@ -2203,6 +2701,13 @@ function PayrollSettings({ db }) {
       )}
       {tab === 'groups' && <PayGroups db={db} />}
       {tab === 'structures' && <PayStructures db={db} />}
+      {tab === 'pfesi' && <PfEsiSettings db={db} />}
+      {tab === 'ptlwf' && <PtLwfSettings db={db} />}
+      {tab === 'wage' && <WageRuleSettings db={db} />}
+      {tab === 'exit' && <ExitSettings db={db} />}
+      {tab === 'mail' && <MailSettings db={db} />}
+      {tab === 'gratuity' && <GratuitySettings db={db} />}
+      {tab === 'approval' && <ApprovalSettings db={db} user={user} />}
     </div>
   );
 }

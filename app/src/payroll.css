@@ -96,27 +96,13 @@
 }
 .pr-entity {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  z-index: 30;
   margin-bottom: 22px;
-  color: var(--muted);
 }
-.pr-entity select {
-  appearance: none;
-  border: 0;
-  background: none;
-  color: var(--ink);
+.pr-entity .dd-btn {
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  padding: 0 22px 0 0;
-  cursor: pointer;
-}
-.pr-entity .icon {
-  position: absolute;
-  right: 0;
-  pointer-events: none;
 }
 .pr-stack {
   display: flex;
