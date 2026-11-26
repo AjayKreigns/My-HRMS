@@ -14,7 +14,8 @@ import Team from './pages/Team.jsx';
 import Finances from './pages/Finances.jsx';
 import { Directory, OrgTree, Engage } from './pages/Org.jsx';
 import Admin from './pages/Admin.jsx';
-import logo from './assets/ifluids-logo.png';
+import hiveLogo from './assets/ife-hive-logo-white.svg';
+import hiveMark from './assets/ife-hive-mark-dark.svg';
 
 export function useHash() {
   const [hash, setHash] = useState(window.location.hash || '#/');
@@ -339,10 +340,11 @@ function Shell({ user, route }) {
       <aside className={`side ${open ? 'open' : ''}`}>
         <div className="side-brand">
           <span className="side-logo">
-            <img src={logo} alt="iFluids Engineering" />
+            <img src={hiveLogo} alt="iFe Hive" />
           </span>
-          <span className="side-mono" aria-hidden="true">iF</span>
-          <span className="side-name">HRMS</span>
+          <span className="side-mono" aria-hidden="true">
+            <img src={hiveMark} alt="" />
+          </span>
         </div>
         <nav className={`side-nav ${navReady ? 'ready' : ''}`} ref={navRef}>
           <span className="nav-thumb" aria-hidden="true" />
@@ -498,7 +500,7 @@ export default function App() {
   const db = useDB();
   const user = getSessionId() ? currentUser(db) : null;
   useEffect(() => {
-    document.title = user ? 'iFluids HRMS' : 'iFluids HRMS Login';
+    document.title = user ? 'iFe Hive' : 'iFe Hive Login';
   }, [user]);
   let view;
   if (!user) view = <Login mode={route[0] === 'forgot-password' ? 'forgot' : 'login'} />;

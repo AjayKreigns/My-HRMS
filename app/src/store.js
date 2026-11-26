@@ -1,4 +1,4 @@
-// Browser-side database for iFluids HRMS. Everything lives in localStorage so the
+// Browser-side database for iFe Hive. Everything lives in localStorage so the
 // static build works without a server; "Reset demo data" in Settings restores the seed.
 import { useEffect, useReducer } from 'react';
 import { seed, seedLeaveTypes } from './seed.js';

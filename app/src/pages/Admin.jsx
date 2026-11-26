@@ -49,7 +49,7 @@ export function newEmployeeFields(db) {
     ...jobFields(db).map((f) => ({ ...f, section: 'Job details' })),
     ...timeFields(db).map((f) => ({ ...f, section: 'Time, leave & expense policies' })),
     ...FINANCE_FIELDS,
-    { key: 'password', label: 'Initial HRMS password', type: 'text', required: true, default: 'Welcome@123', section: 'HRMS login', help: 'Share this with the employee; they can change it after logging in.' },
+    { key: 'password', label: 'Initial iFe Hive password', type: 'text', required: true, default: 'Welcome@123', section: 'iFe Hive login', help: 'Share this with the employee; they can change it after logging in.' },
   ];
 }
 
@@ -209,7 +209,7 @@ function Employees({ user }) {
           onClose={() => setPw(null)}
           onSave={(v) => {
             patchItem('employees', pw.id, { password: v.password });
-            notify(pw.id, 'HR reset your HRMS password.');
+            notify(pw.id, 'HR reset your iFe Hive password.');
             setPw(null);
             toast('Password reset');
           }}
@@ -611,7 +611,7 @@ function Settings() {
               onClick={() => {
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(new Blob([JSON.stringify(getDB(), null, 1)], { type: 'application/json' }));
-                a.download = `ifluids-hrms-backup-${todayISO()}.json`;
+                a.download = `ife-hive-backup-${todayISO()}.json`;
                 a.click();
               }}
             >
@@ -636,7 +636,7 @@ function Settings() {
                     });
                     toast('Backup restored');
                   } catch {
-                    toast('That file is not an HRMS backup.', 'error');
+                    toast('That file is not an iFe Hive backup.', 'error');
                   }
                 }}
               />

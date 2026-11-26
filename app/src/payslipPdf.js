@@ -6,6 +6,22 @@ export function payslipPassword(emp) {
   const dob = emp?.dob || '';
   return `${emp?.empNo || ''}${dob ? `${dob.slice(8, 10)}${dob.slice(5, 7)}${dob.slice(0, 4)}` : ''}`;
 }
+// The company logo goes on every payslip. It is read lazily, so a missing image never stops the PDF.
+async function companyLogo() {
+  try {
+    const url = (await import('./assets/ifluids-logo.png')).default;
+    const blob = await (await fetch(url)).blob();
+    const data = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(blob);
+    });
+    return data;
+  } catch {
+    return null;
+  }
+}
 const inr = (n) => `INR ${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
 
 export async function payslipPdf(db, slip) {
@@ -20,11 +36,17 @@ export async function payslipPdf(db, slip) {
     doc.setFontSize(size);
     doc.text(String(t), x, y, { align });
   };
-  text(db.company.name, 40, 16, 'bold');
+  const logo = await companyLogo();
+  const left = logo ? 40 + 112 : 40;
+  if (logo) {
+    doc.addImage(logo, 'PNG', 40, 26, 100, 35);
+    y = 44;
+  }
+  text(db.company.name, left, 16, 'bold');
   text(`Payslip for ${monthLabel(slip.ym)}`, W - 40, 12, 'bold', 'right');
   y += 16;
-  text([db.company.address, db.company.city].filter(Boolean).join(', '), 40, 9);
-  y += 24;
+  text([db.company.address, db.company.city].filter(Boolean).join(', '), left, 9);
+  y += logo ? 30 : 24;
   const info = [
     ['Employee', fullName(e)], ['Employee no', e.empNo], ['Job title', e.designation], ['Department', e.department],
     ['PAN', e.pan || '—'], ['UAN', e.uan || '—'], ['Pay group', slip.payGroup || '—'], ['Paid days', `${slip.paidDays} of ${slip.dim}`],

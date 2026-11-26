@@ -4,6 +4,7 @@ import { Card, Btn, Badge, DataTable, FormModal, PageHead, KV, Stat, Modal, Empt
 import { go } from '../App.jsx';
 import TaxStatement from './TaxStatement.jsx';
 import { downloadPayslipPdf } from '../payslipPdf.js';
+import companyLogo from '../assets/ifluids-logo.png';
 import { taxProjection, cycleMonthOf, cycleStartOf, money, monthLabel, payslipFor, breakupFor, settingsFor, payGroupOf, incomeTax, declarationTotal, fullName, fmtDate, todayISO, ymOf, addMonths, empById, loanEmi } from '../utils.js';
 
 const TABS = [
@@ -43,9 +44,12 @@ export function PayslipView({ slip, company }) {
   return (
     <div className="payslip">
       <div className="row between" style={{ alignItems: 'flex-start' }}>
-        <div>
-          <h3 style={{ fontSize: 17 }}>{company.name}</h3>
-          <p className="muted">{company.address}{company.city ? `, ${company.city}` : ''}</p>
+        <div className="row" style={{ gap: 14, alignItems: 'center' }}>
+          <img src={companyLogo} alt={company.name} height="44" style={{ height: 44, width: 'auto', flex: 'none' }} />
+          <div>
+            <h3 style={{ fontSize: 17 }}>{company.name}</h3>
+            <p className="muted">{company.address}{company.city ? `, ${company.city}` : ''}</p>
+          </div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <strong>Payslip for {monthLabel(slip.ym)}</strong>

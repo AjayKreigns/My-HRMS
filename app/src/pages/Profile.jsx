@@ -62,7 +62,7 @@ export const jobFields = (db) => [
   { key: 'probationEndDate', label: 'Probation end date', type: 'date' },
   { key: 'noticePeriodDays', label: 'Notice period (days)', type: 'number', default: 60 },
   { key: 'status', label: 'Employment status', type: 'select', options: ['Pre-boarding', 'Probation', 'Active', 'Notice period', 'Exited'], default: 'Probation' },
-  { key: 'role', label: 'HRMS access role', type: 'select', options: [{ value: 'employee', label: 'Employee' }, { value: 'manager', label: 'Manager' }, { value: 'admin', label: 'HR / Admin' }], default: 'employee' },
+  { key: 'role', label: 'iFe Hive access role', type: 'select', options: [{ value: 'employee', label: 'Employee' }, { value: 'manager', label: 'Manager' }, { value: 'admin', label: 'HR / Admin' }], default: 'employee' },
 ];
 export const timeFields = (db) => [
   { key: 'shiftId', label: 'Shift', type: 'select', options: db.shifts.map((s) => ({ value: s.id, label: s.name })), default: db.shifts[0]?.id },

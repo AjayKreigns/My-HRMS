@@ -1,4 +1,4 @@
-# iFluids HRMS
+# iFe Hive
 
 HR, payroll and time management for iFluids Engineering. A React 18 + Vite single-page app that keeps its data in the browser (localStorage), so it needs no server.
 

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { getDB, setSession, addItem } from '../store.js';
 import { Modal, toast } from '../ui.jsx';
 import photo from '../assets/login-photo.jpg';
-import logo from '../assets/ifluids-logo.png';
+import hiveLogo from '../assets/ife-hive-logo.svg';
+import hiveMark from '../assets/ife-hive-mark.svg';
+import companyLogo from '../assets/ifluids-logo.png';
 import '../login.css';
 
 const svgUrl = (s) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(s)}`;
@@ -14,9 +16,6 @@ const BADGE = (glyph, small, big) =>
   );
 const APP_STORE = BADGE('<rect x="12" y="7" width="12" height="20" rx="2.5" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="18" cy="23.5" r="1" fill="#fff"/>', 'Download on the', 'App Store');
 const PLAY_STORE = BADGE('<path d="M12 7.5v19l14-9.5z" fill="#fff"/>', 'GET IT ON', 'Google Play');
-const HRMS_MARK = svgUrl(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="79" height="32" viewBox="0 0 79 32"><text x="0" y="25" fill="#2563eb" font-size="25" font-weight="800" font-family="Arial, sans-serif" letter-spacing="-0.5">hrms</text><circle cx="69" cy="9" r="2.4" fill="#2563eb"/><circle cx="75" cy="6" r="1.6" fill="#2563eb"/><circle cx="75.5" cy="12.5" r="1.6" fill="#2563eb"/></svg>',
-);
 
 // Input with its name shown inside the box; it slides up once the box is used.
 function LgField({ id, label, className = '', ...rest }) {
@@ -81,13 +80,13 @@ export default function Login({ mode = 'login' }) {
       <div className="lg-art">
         <img src={photo} alt="" />
         <div className="lg-art-caption">
-          <span>iFluids HRMS</span>
+          <span>iFe Hive</span>
           <strong>People, pay and time, together.</strong>
         </div>
       </div>
       <div className="lg-panel">
-        <img className="lg-logo" src={logo} alt="iFluids Engineering" width="143" height="50" />
-        <p className="lg-title">{forgot ? 'Forgot password' : 'Login to iFluids HRMS'}</p>
+        <img className="lg-logo" src={hiveLogo} alt="iFe Hive" width="150" height="50" />
+        <p className="lg-title">{forgot ? 'Forgot password' : 'Login to iFe Hive'}</p>
         <p className="lg-sub">{forgot ? 'Enter your work email and HR will reset it.' : 'Welcome back. Sign in with your work email.'}</p>
         {sent ? (
           <div className="lg-sent">
@@ -122,7 +121,7 @@ export default function Login({ mode = 'login' }) {
             </a>
           </div>
           <div className="lg-legal">
-            <img className="lg-mark" src={HRMS_MARK} alt="iFluids HRMS" width="79" height="32" />
+            <img className="lg-mark" src={companyLogo} alt="iFluids Engineering" width="79" height="28" />
             <p>
               By logging in, you agree to the{' '}
               <a href="#/" onClick={(e) => (e.preventDefault(), setLegal('terms'))}>

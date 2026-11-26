@@ -328,7 +328,7 @@ export function seed() {
       { id: 'ob1', empId: 'E121', task: 'Collect signed offer letter', owner: 'E117', dueDate: addDays(today, -2), stage: 'Pre-boarding', done: true },
       { id: 'ob2', empId: 'E121', task: 'Collect ID, address and education documents', owner: 'E117', dueDate: addDays(today, 3), stage: 'Pre-boarding', done: false },
       { id: 'ob3', empId: 'E121', task: 'Issue laptop and safety shoes', owner: 'E120', dueDate: addDays(today, 10), stage: 'Day 1', done: false },
-      { id: 'ob4', empId: 'E121', task: 'Create email account and HRMS login', owner: 'E113', dueDate: addDays(today, 9), stage: 'Day 1', done: false },
+      { id: 'ob4', empId: 'E121', task: 'Create email account and iFe Hive login', owner: 'E113', dueDate: addDays(today, 9), stage: 'Day 1', done: false },
       { id: 'ob5', empId: 'E121', task: 'HSE induction training', owner: 'E104', dueDate: addDays(today, 12), stage: 'Week 1', done: false },
     ],
     exits: [{ id: 'ext1', empId: 'E122', exitType: 'Resignation', resignationDate: addDays(today, -25), lastWorkingDay: addDays(today, 35), reason: 'Higher studies', notes: '', status: 'Approved', checklist: { handover: false, assets: false, accessRevoked: false, exitInterview: false, noDues: false } }],

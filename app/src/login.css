@@ -93,8 +93,8 @@
 }
 .lg-logo {
   display: block;
-  width: 143px;
-  height: 50px;
+  width: auto;
+  height: 58px;
   object-fit: contain;
   object-position: left center;
 }
