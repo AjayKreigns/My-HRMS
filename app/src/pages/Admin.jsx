@@ -1,17 +1,33 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useDB, addItem, patchItem, update, uid, notify, resetDB, getDB } from '../store.js';
 import { Card, Btn, Badge, Tabs, DataTable, FormModal, PageHead, EmpChip, Avatar, Icon, Empty, Stat, Crud, KV, Modal, SearchBox, toast, confirmAction, exportCSV, BarChart, FormGrid, Progress } from '../ui.jsx';
 import { go } from '../App.jsx';
 import { PRIMARY_FIELDS, CONTACT_FIELDS, jobFields, timeFields, FINANCE_FIELDS, ADDRESS_FIELDS, IDENTITY_FIELDS, unflatten } from './Profile.jsx';
-import Payroll from './Payroll.jsx';
-import { LeaveAdmin, AttendanceAdmin, PerformanceAdmin, ExpensesAdmin, ProjectsAdmin, AssetsAdmin, HelpdeskAdmin } from './AdminOps.jsx';
-import Hiring from './Hiring.jsx';
+// Payroll, the other admin screens and Hiring are separate chunks, opened only when asked for (Payroll is the biggest piece of the app).
+const Payroll = lazy(() => import('./Payroll.jsx'));
+const ops = (name) => lazy(() => import('./AdminOps.jsx').then((m) => ({ default: m[name] })));
+const LeaveAdmin = ops('LeaveAdmin');
+const AttendanceAdmin = ops('AttendanceAdmin');
+const PerformanceAdmin = ops('PerformanceAdmin');
+const ExpensesAdmin = ops('ExpensesAdmin');
+const ProjectsAdmin = ops('ProjectsAdmin');
+const AssetsAdmin = ops('AssetsAdmin');
+const HelpdeskAdmin = ops('HelpdeskAdmin');
+const Hiring = lazy(() => import('./Hiring.jsx'));
 import { empById, fullName, fmtDate, money, todayISO, addDays, breakupFor, parseISO, ymOf, monthLabel, payslipFor, daysInMonth, cycleMonthOf, cycleStartOf, cycleRange, cycleDays, loanEmi, loanOutstanding, loanDueIn } from '../utils.js';
 import { leaveBalances } from '../leave.js';
 import { fnfFor } from '../fnf.js';
 import { monthRecords, attendanceStats } from './TimeOff.jsx';
 
-export default function Admin({ user, section }) {
+export default function Admin(props) {
+  return (
+    <Suspense fallback={<div className="page-loading" role="status"><span className="sr-only">Loading</span></div>}>
+      <AdminSection {...props} />
+    </Suspense>
+  );
+}
+
+function AdminSection({ user, section }) {
   switch (section) {
     case 'lifecycle':
       return <Lifecycle user={user} />;

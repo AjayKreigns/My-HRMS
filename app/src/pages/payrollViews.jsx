@@ -1,8 +1,9 @@
 // Pieces of the Run Payroll and Payroll Analytics screens. They only draw what they are given;
 // the numbers and the actions come from Payroll.jsx. Styles are in payrollx.css.
 import { Icon } from '../ui.jsx';
+import { inNumber } from '../utils.js';
 
-const inr = (n) => `₹${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
+const inr = (n) => `₹${inNumber(Math.round(Number(n) || 0))}`;
 // Big amounts the way people say them in India.
 export function lakh(n) {
   const v = Number(n) || 0;

@@ -1,7 +1,29 @@
 /* Run Payroll and Payroll Analytics.
    One idea: a month of payroll is a line with gates. Nothing moves on until the gate before it is clear.
    Archivo's width axis does the work of a second typeface: wide for the month, narrow for money. */
-@import '@fontsource-variable/archivo/wdth.css';
+/* Archivo (variable: weight and width). Only the Latin letters are shipped, plus the rupee sign on its own: the packaged "latin-ext"
+   file is 86 KB and was downloaded on every Payroll visit just for the rupee sign (U+20B9).
+   font-display is "optional": if the font has not arrived by the time the page is first drawn, that page view keeps the fallback
+   instead of jumping to Archivo a second later (the jump re-lays out the whole page, a quarter of a second on a slow phone).
+   The file is still fetched and cached, so every later visit uses Archivo from the start. */
+@font-face {
+  font-family: 'Archivo Variable';
+  font-style: normal;
+  font-display: optional;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Archivo Variable';
+  font-style: normal;
+  font-display: optional;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('./assets/fonts/archivo-rupee.woff2') format('woff2-variations');
+  unicode-range: U+20B9;
+}
 
 .px {
   --px-ink: #12202b;

@@ -1,12 +1,12 @@
+import { startTransition } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource/plus-jakarta-sans/400.css';
-import '@fontsource/plus-jakarta-sans/500.css';
-import '@fontsource/plus-jakarta-sans/600.css';
-import '@fontsource/plus-jakarta-sans/700.css';
-import '@fontsource/plus-jakarta-sans/800.css';
+import './fonts.css';
 import './styles.css';
 import App from './App.jsx';
 // Loaded after every page's own styles so the glass layer sits on top.
 import './glass.css';
 
-createRoot(document.getElementById('root')).render(<App />);
+// Drawn as a transition so React works in slices of a few milliseconds and lets the browser breathe between them,
+// instead of one block of work that freezes a slow phone while the first screen is built.
+const root = createRoot(document.getElementById('root'));
+startTransition(() => root.render(<App />));

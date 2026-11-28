@@ -52,9 +52,14 @@ export const daysInMonth = (ym) => {
   return new Date(y, m, 0).getDate();
 };
 
+// One formatter for the whole app: number.toLocaleString('en-IN') builds a new one on every call, which was a visible part of
+// the first screen's work on a slow phone (a page can show hundreds of amounts). The output is the same.
+const indianNumber = new Intl.NumberFormat('en-IN');
+export const inNumber = (n) => indianNumber.format(n);
+
 export function money(n, cur = 'INR') {
   const v = Math.round(Number(n) || 0);
-  return (cur === 'INR' ? '₹' : cur + ' ') + v.toLocaleString('en-IN');
+  return (cur === 'INR' ? '₹' : cur + ' ') + inNumber(v);
 }
 
 export function minutesBetween(a, b) {

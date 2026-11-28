@@ -102,9 +102,18 @@ function upgrade(db) {
   return db;
 }
 
-const newDB = () => freezeLockedRuns(sampleLeaveFor(removeLeaveFor(seed(), NO_LEAVE_EMPLOYEE), SAMPLE_LEAVE_EMPLOYEE));
+const newDB = () => sampleLeaveFor(removeLeaveFor(seed(), NO_LEAVE_EMPLOYEE), SAMPLE_LEAVE_EMPLOYEE);
 const saved = load();
 let state = saved ? upgrade(saved) : newDB();
+// Fresh sample data has locked payroll months without their frozen payslips yet. Working those out takes a quarter of a second on a
+// slow phone, and it used to happen on every page load (even the sign-in screen) until the first edit saved the data. Nothing reads the
+// frozen copy before an edit (every reader falls back to the live figures, which are the same), so it is done just before the first change.
+let freezePending = !saved;
+function freezeNow() {
+  if (!freezePending) return;
+  freezePending = false;
+  freezeLockedRuns(state);
+}
 const listeners = new Set();
 // Write an upgraded copy back at once, so the one-time changes do not run again on the next visit.
 if (saved) {
@@ -141,6 +150,7 @@ const clone = typeof structuredClone === 'function' ? structuredClone : (x) => J
 
 // Mutate a copy of the database and persist it.
 export function update(fn) {
+  freezeNow();
   const next = clone(state);
   fn(next);
   // Pay-related changes to people and payroll settings are written to the audit log, with who made them.
@@ -151,6 +161,8 @@ export function update(fn) {
 
 export function resetDB() {
   state = newDB();
+  freezePending = true;
+  freezeNow();
   save();
 }
 

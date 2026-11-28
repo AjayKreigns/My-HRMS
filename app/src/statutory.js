@@ -36,28 +36,38 @@ const dateOf = (s) => {
   return new Date(y, m - 1, d || 1);
 };
 
-// The ceiling in force on one day.
-export function pfCeilingOn(policy, date) {
-  const rules = sortedRules(policy?.rules).length ? sortedRules(policy.rules) : PF_DEFAULTS.rules;
-  const day = date || isoOf(new Date());
+const rulesOf = (policy) => {
+  const rules = sortedRules(policy?.rules);
+  return rules.length ? rules : PF_DEFAULTS.rules;
+};
+const ceilingIn = (rules, day) => {
   let ceiling = rules[0].ceiling;
   rules.forEach((r) => {
     if (r.from <= day) ceiling = r.ceiling;
   });
   return ceiling;
+};
+
+// The ceiling in force on one day.
+export function pfCeilingOn(policy, date) {
+  return ceilingIn(rulesOf(policy), date || isoOf(new Date()));
 }
 
 // The ceiling for a pay cycle. When the rule changes inside the cycle, each day uses the ceiling of
 // its own day and the cycle gets the average (so 12 days at 15,000 and 19 at 25,000 is about 21,129).
+// The rules are sorted once, not once per day, and a cycle with no change inside it needs no day-by-day count: payslips for a whole
+// company ask for this hundreds of times.
 export function pfCeilingForCycle(policy, from, to) {
   if (!from || !to) return pfCeilingOn(policy);
+  const rules = rulesOf(policy);
+  if (!rules.some((r) => r.from > from && r.from <= to)) return ceilingIn(rules, from);
   let sum = 0;
   let days = 0;
   for (let d = dateOf(from); isoOf(d) <= to; d.setDate(d.getDate() + 1)) {
-    sum += pfCeilingOn(policy, isoOf(d));
+    sum += ceilingIn(rules, isoOf(d));
     days++;
   }
-  return days ? sum / days : pfCeilingOn(policy, from);
+  return days ? sum / days : ceilingIn(rules, from);
 }
 
 // Employee profile choice: 'Capped at ceiling' / 'Actual basic'; blank follows the company.

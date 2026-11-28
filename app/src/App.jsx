@@ -2,23 +2,12 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { useDB, currentUser, setSession, update, getSessionId } from './store.js';
 import { Icon, Avatar, Toasts, toast, FormModal } from './ui.jsx';
 import { fullName, initials, todayISO, minutesBetween, hm, pad } from './utils.js';
+import { loaders } from './loaders.js';
 import Login from './pages/Login.jsx';
 import Inbox, { pendingFor } from './pages/Inbox.jsx'; // the sidebar badge needs pendingFor, and the page is small
 // Every other page is loaded the first time it is opened, so the sign-in screen and the first page do not download the whole app
 // (Payroll and the admin tools alone are more than half of it).
 const named = (load, name) => lazy(() => load().then((m) => ({ default: m[name] })));
-const loaders = {
-  home: () => import('./pages/Home.jsx'),
-  timeOff: () => import('./pages/TimeOff.jsx'),
-  performance: () => import('./pages/Performance.jsx'),
-  requests: () => import('./pages/Requests.jsx'),
-  timesheets: () => import('./pages/Timesheets.jsx'),
-  profile: () => import('./pages/Profile.jsx'),
-  team: () => import('./pages/Team.jsx'),
-  finances: () => import('./pages/Finances.jsx'),
-  org: () => import('./pages/Org.jsx'),
-  admin: () => import('./pages/Admin.jsx'),
-};
 const Home = lazy(loaders.home);
 const Attendance = named(loaders.timeOff, 'Attendance');
 const Leave = named(loaders.timeOff, 'Leave');
@@ -35,6 +24,7 @@ const Directory = named(loaders.org, 'Directory');
 const OrgTree = named(loaders.org, 'OrgTree');
 const Engage = named(loaders.org, 'Engage');
 const Admin = lazy(loaders.admin);
+const Payroll = lazy(loaders.payroll);
 import hiveLogo from './assets/ife-hive-logo-white.svg';
 import hiveMark from './assets/ife-hive-mark-dark.svg';
 
@@ -266,7 +256,7 @@ function Shell({ user, route }) {
   // A few seconds after the first page is up, fetch the other pages' code one piece at a time while the browser is idle, so opening
   // them later does not wait on the network (on a slow phone the first visit to Payroll took 0.8 s). The admin tools only for admins.
   useEffect(() => {
-    const order = [loaders.home, loaders.timeOff, loaders.finances, loaders.requests, loaders.profile, loaders.performance, loaders.timesheets, loaders.team, loaders.org, ...(user.role === 'admin' ? [loaders.admin] : [])];
+    const order = [loaders.home, loaders.timeOff, loaders.finances, loaders.requests, loaders.profile, loaders.performance, loaders.timesheets, loaders.team, loaders.org, ...(user.role === 'admin' ? [loaders.payroll, loaders.admin, loaders.adminOps, loaders.hiring] : [])];
     let i = 0;
     let handle;
     const idle = (fn) => ('requestIdleCallback' in window ? window.requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 300));
@@ -318,7 +308,7 @@ function Shell({ user, route }) {
       page = sub === 'tree' ? <OrgTree user={user} /> : sub === 'engage' ? <Engage user={user} /> : <Directory user={user} />;
       break;
     case 'admin':
-      page = user.role === 'admin' ? <Admin user={user} section={sub || 'employees'} tab={extra} /> : <Home user={user} />;
+      page = user.role !== 'admin' ? <Home user={user} /> : sub === 'payroll' ? <Payroll user={user} /> : <Admin user={user} section={sub || 'employees'} tab={extra} />;
       break;
     default:
       page = <Home user={user} />;
