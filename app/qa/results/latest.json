@@ -1,0 +1,843 @@
+{
+  "generatedAt": "2026-11-28 13:04",
+  "commit": "2a5ad03",
+  "dirty": true,
+  "node": "v26.13.0",
+  "projectsRun": [
+    "chromium"
+  ],
+  "payroll": {
+    "exitCode": 0,
+    "passed": 73,
+    "tests": [
+      {
+        "group": "loans",
+        "name": "no interest splits evenly",
+        "status": "pass"
+      },
+      {
+        "group": "loans",
+        "name": "12% for 12 months is the standard EMI",
+        "status": "pass"
+      },
+      {
+        "group": "loans",
+        "name": "balance reaches zero after the last EMI",
+        "status": "pass"
+      },
+      {
+        "group": "loans",
+        "name": "paying every EMI clears the loan",
+        "status": "pass"
+      },
+      {
+        "group": "loans",
+        "name": "outstanding follows the months paid",
+        "status": "pass"
+      },
+      {
+        "group": "loans",
+        "name": "payslip deducts the interest-bearing EMI",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund",
+        "name": "employer PF follows loss of pay like the employee share",
+        "status": "pass"
+      },
+      {
+        "group": "tax",
+        "name": "marginal relief just over the 12 lakh limit",
+        "status": "pass"
+      },
+      {
+        "group": "tax",
+        "name": "well above the limit the normal slabs apply",
+        "status": "pass"
+      },
+      {
+        "group": "tax",
+        "name": "a bonus raises the year projection, so TDS rises by the extra tax spread over the months left",
+        "status": "pass"
+      },
+      {
+        "group": "tax",
+        "name": "a reimbursement is not taxed",
+        "status": "pass"
+      },
+      {
+        "group": "locked months",
+        "name": "a locked month does not change when pay rules change afterwards",
+        "status": "pass"
+      },
+      {
+        "group": "full and final",
+        "name": "final month is prorated over the pay cycle, not the calendar month",
+        "status": "pass"
+      },
+      {
+        "group": "full and final",
+        "name": "outstanding loan is the balance, not one EMI",
+        "status": "pass"
+      },
+      {
+        "group": "full and final",
+        "name": "contract staff get gratuity after one year, permanent staff do not",
+        "status": "pass"
+      },
+      {
+        "group": "full and final",
+        "name": "permanent staff with five years get gratuity",
+        "status": "pass"
+      },
+      {
+        "group": "full and final",
+        "name": "someone settled and marked Exited is still paid for their last cycle",
+        "status": "pass"
+      },
+      {
+        "group": "PF opt-out on the employee",
+        "name": "blank follows the pay group, No removes PF, Yes forces it on",
+        "status": "pass"
+      },
+      {
+        "group": "gratuity on the employee",
+        "name": "No removes gratuity from the CTC and the full and final; Yes brings it back",
+        "status": "pass"
+      },
+      {
+        "group": "gratuity policy",
+        "name": "defaults are the Act: 15/26, 5 years (1 fixed-term), 6-month rounding, 20 lakh cap",
+        "status": "pass"
+      },
+      {
+        "group": "gratuity policy",
+        "name": "every part of the formula can be changed",
+        "status": "pass"
+      },
+      {
+        "group": "gratuity policy",
+        "name": "full and final uses the saved policy",
+        "status": "pass"
+      },
+      {
+        "group": "gratuity policy",
+        "name": "switching gratuity off removes it everywhere and keeps the settings",
+        "status": "pass"
+      },
+      {
+        "group": "gratuity policy",
+        "name": "selected-employees mode gives gratuity only to those marked Yes",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "the ceiling follows the dated rules and a cycle that holds the change blends the days",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "payslips use the ceiling of their own cycle",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "capped basis: 12% of the ceiling, employer share split into EPS and EPF",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "actual basis: 12% of the full basic, pension still on the ceiling",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "a member with no pension share has the whole employer share in EPF",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "every rate, the ceiling and the charges can be changed",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "employer PF and charges come out of the CTC only when set so",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "the ECR file has the 11 fields of ECR 2.0 and leaves out members with no UAN",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "months locked before the PF split was stored still give an ECR line",
+        "status": "pass"
+      },
+      {
+        "group": "provident fund rules",
+        "name": "the administration charge for the month never goes under the minimum",
+        "status": "pass"
+      },
+      {
+        "group": "ESI",
+        "name": "covered up to the limit: employee 0.75% and employer 3.25%, rounded up",
+        "status": "pass"
+      },
+      {
+        "group": "ESI",
+        "name": "overtime is not ESI wages",
+        "status": "pass"
+      },
+      {
+        "group": "ESI",
+        "name": "the contribution period decides: a raise keeps cover to the end of the period, not into the next",
+        "status": "pass"
+      },
+      {
+        "group": "ESI",
+        "name": "a joiner is judged on their first month in the period",
+        "status": "pass"
+      },
+      {
+        "group": "ESI",
+        "name": "the limit, rates, periods and the on/off switch are editable",
+        "status": "pass"
+      },
+      {
+        "group": "ESI",
+        "name": "the ESI file uses the ESIC template columns",
+        "status": "pass"
+      },
+      {
+        "group": "ESI",
+        "name": "locked months keep their PF and ESI when the rules change",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "approval is off by default: the person who processes can lock, and a snapshot freezes the month",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "only a processed month with no pending changes can be locked",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "with a second approver, locking directly is refused and submitting notifies every other admin",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "the submitter cannot approve; another admin can, and approval locks the month",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "chosen approvers replace the admin default and can be anyone, not only admins",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "if the only approver is the submitter, submitting says so instead of getting stuck",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "sending back needs a reason, keeps it on the month, and the same person can submit again",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "a change after submitting withdraws the submission",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "without an approver, an admin unlocks directly but must give a reason, and the snapshot is dropped",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "a paid month cannot be unlocked",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "with an approver, unlocking is a request: reason needed, someone else decides",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "an unlock request can be declined with a reason or withdrawn",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "switching approval off cancels what was waiting",
+        "status": "pass"
+      },
+      {
+        "group": "locking and approval",
+        "name": "the approver summary adds up the month",
+        "status": "pass"
+      },
+      {
+        "group": "income tax projection",
+        "name": "tax is rounded to ten rupees and surcharge has marginal relief",
+        "status": "pass"
+      },
+      {
+        "group": "income tax projection",
+        "name": "old regime: HRA uses the metro 50% of basic, and PF counts under 80C",
+        "status": "pass"
+      },
+      {
+        "group": "income tax projection",
+        "name": "with no history the monthly TDS is the year tax split into twelve",
+        "status": "pass"
+      },
+      {
+        "group": "income tax projection",
+        "name": "a month locked with less tax deducted is made up in the months that follow",
+        "status": "pass"
+      },
+      {
+        "group": "income tax projection",
+        "name": "a joiner is taxed on the months worked, and previous employer income and TDS are counted",
+        "status": "pass"
+      },
+      {
+        "group": "income tax projection",
+        "name": "the default regime is new and an employee can switch to old",
+        "status": "pass"
+      },
+      {
+        "group": "professional tax and labour welfare fund",
+        "name": "Tamil Nadu slabs: monthly sixths that add up to the half-yearly amount",
+        "status": "pass"
+      },
+      {
+        "group": "professional tax and labour welfare fund",
+        "name": "payslips deduct the slab, a pay group can fix an amount, and the slabs are editable",
+        "status": "pass"
+      },
+      {
+        "group": "professional tax and labour welfare fund",
+        "name": "the labour welfare fund is taken only in its due month, and half-yearly when set so",
+        "status": "pass"
+      },
+      {
+        "group": "attendance exceptions",
+        "name": "absent and action-required days are listed, undecided, and an undecided day blocks nothing in the pay itself",
+        "status": "pass"
+      },
+      {
+        "group": "attendance exceptions",
+        "name": "deciding a day: Paid costs nothing, Loss of pay one day, Half day half a day; decisions can change",
+        "status": "pass"
+      },
+      {
+        "group": "attendance exceptions",
+        "name": "an exception employee is never listed and loses no pay for attendance",
+        "status": "pass"
+      },
+      {
+        "group": "wage rule",
+        "name": "wages share counts basic plus anything not excluded; the share and exclusions are the admin’s",
+        "status": "pass"
+      },
+      {
+        "group": "arrears",
+        "name": "a back-dated revision owes arrears for the locked months it covers, and PF is due on the basic part",
+        "status": "pass"
+      },
+      {
+        "group": "full and final settings",
+        "name": "leave encashment and notice recovery follow the exit settings",
+        "status": "pass"
+      },
+      {
+        "group": "audit, mail and PDF",
+        "name": "pay-related changes are logged with who made them; unrelated edits are not",
+        "status": "pass"
+      },
+      {
+        "group": "audit, mail and PDF",
+        "name": "releasing payroll queues one payslip email per paid employee, once",
+        "status": "pass"
+      },
+      {
+        "group": "audit, mail and PDF",
+        "name": "the payslip PDF opens with the employee number and date of birth, and is encrypted",
+        "status": "pass"
+      }
+    ],
+    "failure": null
+  },
+  "e2e": {
+    "exitCode": 0,
+    "projects": [
+      "chromium"
+    ],
+    "tests": [
+      {
+        "area": "sign in",
+        "name": "login page shows the iFe Hive and iFluids branding",
+        "file": "ife-hive.spec.js:7",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 1779
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3502,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 7164,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "sign in",
+        "name": "a wrong password is rejected and the user stays on the login page",
+        "file": "ife-hive.spec.js:16",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 2609
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3291,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 8721,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "sign in",
+        "name": "the admin demo account lands on Home with no console errors",
+        "file": "ife-hive.spec.js:25",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 2465
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3851,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 2293,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "role access",
+        "name": "an employee cannot see or open admin pages",
+        "file": "ife-hive.spec.js:37",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 2588
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3150,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 3662,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "layout",
+        "name": "the topbar \"Not clocked in\" label stays on one line",
+        "file": "ife-hive.spec.js:55",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 2637
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 2786,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 2438,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "layout",
+        "name": "the payroll entity heading scrolls under the topbar (desktop)",
+        "file": "ife-hive.spec.js:69",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 3583
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 6113,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 5517,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "layout",
+        "name": "the payroll entity heading scrolls under the topbar (phone)",
+        "file": "ife-hive.spec.js:69",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 2948
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 4840,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 4640,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "layout",
+        "name": "the payroll legal entity menu opens above the page content",
+        "file": "ife-hive.spec.js:97",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 3680
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 5395,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 5062,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "layout",
+        "name": "no page scrolls sideways at phone width",
+        "file": "ife-hive.spec.js:111",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 3054
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 2329,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 2336,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "payslip",
+        "name": "the payslip shows the iFluids Engineering company logo",
+        "file": "ife-hive.spec.js:148",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 3705
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3079,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 4542,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "payslip",
+        "name": "the payslip header has no placeholder address text",
+        "file": "ife-hive.spec.js:156",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 3803
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3284,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 4617,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "payslip",
+        "name": "a placeholder address saved by an older version is cleared, without a stray comma",
+        "file": "ife-hive.spec.js:161",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 4027
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3390,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 5174,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "payslip",
+        "name": "downloading a payslip gives a password-protected PDF named with the employee number and month",
+        "file": "ife-hive.spec.js:170",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 4991
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 3846,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 6329,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "payslip",
+        "name": "an address someone typed is kept and printed on the payslip",
+        "file": "ife-hive.spec.js:179",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 3545
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 4173,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 5406,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "accessibility",
+        "name": "no WCAG A or AA violations on any page (light theme)",
+        "file": "ife-hive.spec.js:265",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 219372
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 152735,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 132572,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "accessibility",
+        "name": "no WCAG A or AA violations on any page (dark theme)",
+        "file": "ife-hive.spec.js:270",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 219036
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 155014,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 127135,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "accessibility",
+        "name": "no best-practice violations on any page (headings, landmarks, table headers)",
+        "file": "ife-hive.spec.js:276",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 218428
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 203412,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 115962,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "accessibility",
+        "name": "manager: no accessibility violations on any page, profile tab or dialog (light theme)",
+        "file": "ife-hive.spec.js:281",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 214591
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 108693,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 80175,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "accessibility",
+        "name": "employee: no accessibility violations on any page, profile tab or dialog (light theme)",
+        "file": "ife-hive.spec.js:286",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 213272
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 104484,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 71898,
+            "carried": true
+          }
+        }
+      },
+      {
+        "area": "accessibility",
+        "name": "employee: no WCAG A or AA violations on any page, profile tab or dialog (dark theme)",
+        "file": "ife-hive.spec.js:291",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 198265
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 95225,
+            "carried": true
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 66537,
+            "carried": true
+          }
+        }
+      }
+    ],
+    "stats": {
+      "expected": 20,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0
+    }
+  },
+  "build": {
+    "exitCode": 0,
+    "mainJsKB": 299.89,
+    "mainJsGzipKB": 99.72,
+    "chunkWarning": false
+  },
+  "audit": {
+    "counts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 1,
+      "high": 1,
+      "critical": 0,
+      "total": 2
+    },
+    "packages": [
+      {
+        "name": "esbuild",
+        "severity": "moderate",
+        "direct": false
+      },
+      {
+        "name": "vite",
+        "severity": "high",
+        "direct": true
+      }
+    ]
+  }
+}

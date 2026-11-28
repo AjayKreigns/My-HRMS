@@ -1,0 +1,92 @@
+[
+  {
+    "id": "S-01",
+    "name": "Accessibility, WCAG 2.x A and AA plus best practice (all roles, profile tabs, payslip dialog)",
+    "tool": "axe-core via Playwright, automated (6 tests, 3 browsers)",
+    "lastRun": "2026-11-28",
+    "result": "PASS",
+    "summary": "All 6 accessibility tests pass on Chromium, Firefox and WebKit; run by npm run qa:update",
+    "details": "results/scans/2026-11-28.md#accessibility-now-automated"
+  },
+  {
+    "id": "S-02",
+    "name": "Keyboard order and focus ring on the login page",
+    "tool": "Playwright",
+    "lastRun": "2026-11-27",
+    "result": "PASS",
+    "summary": "Tab visits email, password, Login and the links in order; every stop shows a focus ring",
+    "details": "results/scans/2026-11-27.md#accessibility"
+  },
+  {
+    "id": "S-03",
+    "name": "Page speed, desktop",
+    "tool": "Chromium via Playwright, production build",
+    "lastRun": "2026-11-28",
+    "result": "PASS",
+    "summary": "First paint 0.19 to 0.25 s, no layout shift",
+    "details": "results/scans/2026-11-28.md#page-speed-on-a-phone-class-device"
+  },
+  {
+    "id": "S-04",
+    "name": "Page speed, mid-tier phone (375 px, 4x CPU slowdown, 1.6 Mbps)",
+    "tool": "Chromium via Playwright, production build",
+    "lastRun": "2026-11-28",
+    "result": "IMPROVED, NEEDS WORK",
+    "summary": "First paint 1.65 to 1.69 s (was 2.1 to 2.6 s); largest paint 1.65 s Home, 2.03 s Login, 3.73 s Payroll opened directly; blocked time 0.39 to 0.73 s",
+    "details": "results/scans/2026-11-28.md#page-speed-on-a-phone-class-device"
+  },
+  {
+    "id": "S-05",
+    "name": "Live sites load (GitHub Pages and Cloudflare)",
+    "tool": "Playwright, read only",
+    "lastRun": "2026-11-27",
+    "result": "PASS",
+    "summary": "Both show the iFe Hive login with all logos and no console errors (they do not yet have the 2026-11-27 fixes)",
+    "details": "results/scans/2026-11-27.md#live-sites"
+  },
+  {
+    "id": "S-06",
+    "name": "Security headers on the live sites",
+    "tool": "Playwright, read only",
+    "lastRun": "2026-11-27",
+    "result": "FAIL",
+    "summary": "No Content-Security-Policy, X-Content-Type-Options, X-Frame-Options or Referrer-Policy on either; HSTS on GitHub Pages only",
+    "details": "results/scans/2026-11-27.md#live-sites"
+  },
+  {
+    "id": "S-07",
+    "name": "Lint",
+    "tool": "none configured",
+    "lastRun": "never",
+    "result": "NOT SET UP",
+    "summary": "No ESLint config in the project",
+    "details": ""
+  },
+  {
+    "id": "S-08",
+    "name": "Visual regression (screenshot comparison)",
+    "tool": "none configured",
+    "lastRun": "never",
+    "result": "NOT SET UP",
+    "summary": "No baseline screenshots",
+    "details": ""
+  },
+  {
+    "id": "S-09",
+    "name": "Screen reader and real-device testing",
+    "tool": "manual",
+    "lastRun": "never",
+    "result": "NOT DONE",
+    "summary": "Needs a person with NVDA or VoiceOver and a real phone",
+    "details": ""
+  },
+  {
+    "id": "S-10",
+    "name": "Full-frontend sweep: every page and tab, 3 roles, desktop and phone",
+    "tool": "Playwright (e2e/full-frontend.spec.js), run with npm run qa:update:full",
+    "lastRun": "2026-11-28",
+    "result": "PASS",
+    "summary": "12 of 12 on Chromium, Firefox and WebKit; 645 views, zero problems; slowest view is the Leave page animation at about 1.28 s",
+    "details": "results/scans/2026-11-28.md#full-frontend-sweep"
+  }
+]
