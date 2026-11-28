@@ -41,8 +41,8 @@
     "tool": "qa/scans/live-check.cjs (Playwright, read only)",
     "lastRun": "2026-11-28",
     "result": "PASS",
-    "summary": "Both sites serve the 2026-11-28 build and pass 14 of 14 checks: the three fixes, on-demand pages, WebP login photo, encrypted payslip PDF, no console errors",
-    "details": "results/scans/2026-11-28.md#deployment"
+    "summary": "Both sites serve the evening build (commit 4a17aa6, main script index-CsuHY79m.js) and pass 14 of 14 checks: the three fixes, on-demand pages, WebP login photo, encrypted payslip PDF, no console errors",
+    "details": "results/scans/2026-11-28.md#deployment-of-the-evening-changes"
   },
   {
     "id": "S-06",
@@ -50,7 +50,7 @@
     "tool": "Playwright, read only",
     "lastRun": "2026-11-28",
     "result": "FAIL",
-    "summary": "Still no Content-Security-Policy, X-Content-Type-Options, X-Frame-Options or Referrer-Policy on either; HSTS on GitHub Pages only. Deferred until real hosting (decision D2)",
+    "summary": "Still no Content-Security-Policy, X-Content-Type-Options, X-Frame-Options or Referrer-Policy on either; HSTS on GitHub Pages only. Deferred until real hosting (decision D2); rechecked after the evening deployment",
     "details": "results/scans/2026-11-28.md#deployment"
   },
   {
