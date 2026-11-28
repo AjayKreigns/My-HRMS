@@ -166,6 +166,7 @@ export default function Payroll({ user }) {
 
   return (
     <div className="pr">
+      <h1 className="sr-only">Payroll</h1>
       <NavTabs className="pr-modules" variant="underline" glideSelector=".pr-body" label="Payroll" items={MODULES.map((m) => ({ key: m.key, label: m.label, href: `#/admin/payroll/${m.key}` }))} active={mod} />
       {subs && <NavTabs className="pr-subs" glideSelector=".pr-body" label={`${mod} sections`} items={subs.map(([k, label]) => ({ key: k, label, href: `#/admin/payroll/${mod}/${k}` }))} active={sub} />}
       <div className="pr-body page-enter">
@@ -2124,7 +2125,7 @@ function StructureEditor({ db, st, onClose }) {
               <th>How it is worked out</th>
               <th>Value</th>
               <th title="Used for the HRA exemption under the old tax regime">HRA</th>
-              <th />
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>

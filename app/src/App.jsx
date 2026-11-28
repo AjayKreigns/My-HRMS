@@ -1,19 +1,40 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useDB, currentUser, setSession, update, getSessionId } from './store.js';
 import { Icon, Avatar, Toasts, toast, FormModal } from './ui.jsx';
-import { fullName, todayISO, minutesBetween, hm, pad } from './utils.js';
+import { fullName, initials, todayISO, minutesBetween, hm, pad } from './utils.js';
 import Login from './pages/Login.jsx';
-import Home from './pages/Home.jsx';
-import { Attendance, Leave } from './pages/TimeOff.jsx';
-import Performance from './pages/Performance.jsx';
-import { Expenses, Helpdesk, Documents, Learning } from './pages/Requests.jsx';
-import Timesheets from './pages/Timesheets.jsx';
-import Profile from './pages/Profile.jsx';
-import Inbox, { pendingFor } from './pages/Inbox.jsx';
-import Team from './pages/Team.jsx';
-import Finances from './pages/Finances.jsx';
-import { Directory, OrgTree, Engage } from './pages/Org.jsx';
-import Admin from './pages/Admin.jsx';
+import Inbox, { pendingFor } from './pages/Inbox.jsx'; // the sidebar badge needs pendingFor, and the page is small
+// Every other page is loaded the first time it is opened, so the sign-in screen and the first page do not download the whole app
+// (Payroll and the admin tools alone are more than half of it).
+const named = (load, name) => lazy(() => load().then((m) => ({ default: m[name] })));
+const loaders = {
+  home: () => import('./pages/Home.jsx'),
+  timeOff: () => import('./pages/TimeOff.jsx'),
+  performance: () => import('./pages/Performance.jsx'),
+  requests: () => import('./pages/Requests.jsx'),
+  timesheets: () => import('./pages/Timesheets.jsx'),
+  profile: () => import('./pages/Profile.jsx'),
+  team: () => import('./pages/Team.jsx'),
+  finances: () => import('./pages/Finances.jsx'),
+  org: () => import('./pages/Org.jsx'),
+  admin: () => import('./pages/Admin.jsx'),
+};
+const Home = lazy(loaders.home);
+const Attendance = named(loaders.timeOff, 'Attendance');
+const Leave = named(loaders.timeOff, 'Leave');
+const Performance = lazy(loaders.performance);
+const Expenses = named(loaders.requests, 'Expenses');
+const Helpdesk = named(loaders.requests, 'Helpdesk');
+const Documents = named(loaders.requests, 'Documents');
+const Learning = named(loaders.requests, 'Learning');
+const Timesheets = lazy(loaders.timesheets);
+const Profile = lazy(loaders.profile);
+const Team = lazy(loaders.team);
+const Finances = lazy(loaders.finances);
+const Directory = named(loaders.org, 'Directory');
+const OrgTree = named(loaders.org, 'OrgTree');
+const Engage = named(loaders.org, 'Engage');
+const Admin = lazy(loaders.admin);
 import hiveLogo from './assets/ife-hive-logo-white.svg';
 import hiveMark from './assets/ife-hive-mark-dark.svg';
 
@@ -242,6 +263,26 @@ function Shell({ user, route }) {
     setMenu(null);
   }, [path]);
 
+  // A few seconds after the first page is up, fetch the other pages' code one piece at a time while the browser is idle, so opening
+  // them later does not wait on the network (on a slow phone the first visit to Payroll took 0.8 s). The admin tools only for admins.
+  useEffect(() => {
+    const order = [loaders.home, loaders.timeOff, loaders.finances, loaders.requests, loaders.profile, loaders.performance, loaders.timesheets, loaders.team, loaders.org, ...(user.role === 'admin' ? [loaders.admin] : [])];
+    let i = 0;
+    let handle;
+    const idle = (fn) => ('requestIdleCallback' in window ? window.requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 300));
+    const cancel = (h) => ('cancelIdleCallback' in window ? window.cancelIdleCallback(h) : clearTimeout(h));
+    const step = () => {
+      if (i >= order.length) return;
+      order[i++]().catch(() => {}); // a failed fetch here is harmless: the page loads normally when opened
+      handle = idle(step);
+    };
+    const start = setTimeout(() => (handle = idle(step)), 4000);
+    return () => {
+      clearTimeout(start);
+      if (handle) cancel(handle);
+    };
+  }, [user.role]);
+
   const [section, sub, extra] = route;
   let page;
   switch (section) {
@@ -352,7 +393,7 @@ function Shell({ user, route }) {
             <div key={i} className="nav-group">
               {g.title && <div className="nav-group-title">{g.title}</div>}
               {g.items.map((it) => (
-                <a key={it.to} href={`#/${it.to}`} className={`nav-item ${isActive(it.to) ? 'active' : ''}`} title={collapsed ? it.label : undefined} aria-label={it.label}>
+                <a key={it.to} href={`#/${it.to}`} className={`nav-item ${isActive(it.to) ? 'active' : ''}`} title={collapsed ? it.label : undefined} aria-label={collapsed ? it.label : undefined}>
                   <Icon name={it.icon} size={17} />
                   <span className="nav-label">{it.label}</span>
                   {it.count && pending > 0 && <span className="count">{pending}</span>}
@@ -435,7 +476,7 @@ function Shell({ user, route }) {
           </a>
           <span className="topbar-sep hide-sm" />
           <div className="dropdown">
-            <button className="icon-btn" style={{ width: 'auto' }} onClick={() => setMenu(menu === 'u' ? null : 'u')} aria-label="Account menu">
+            <button className="icon-btn" style={{ width: 'auto' }} onClick={() => setMenu(menu === 'u' ? null : 'u')} aria-label={`${initials(user)} (${fullName(user)}), account menu`}>
               <Avatar emp={user} size={32} />
             </button>
             {menu === 'u' && (
@@ -469,7 +510,7 @@ function Shell({ user, route }) {
           </div>
         </header>
         <main key={pageKey} className={`content ${section === 'admin' && sub === 'payroll' ? 'content-flush' : 'page-enter'}`}>
-          {page}
+          <Suspense fallback={<div className="page-loading" role="status"><span className="sr-only">Loading</span></div>}>{page}</Suspense>
         </main>
       </div>
       {pw && (

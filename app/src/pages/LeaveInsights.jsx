@@ -111,7 +111,7 @@ function Wheel({ items }) {
             const used = b.quota > 0 ? Math.max(0, Math.min(1, (b.taken + b.pending) / b.quota)) : 0;
             const dim = focus && focus !== b.type.id;
             return (
-              <g key={b.type.id} className={`lv-ring ${dim ? 'dim' : ''}`} tabIndex={0} onMouseEnter={() => setFocus(b.type.id)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(b.type.id)} onBlur={() => setFocus(null)} aria-label={`${b.type.name}: ${r1(b.available)} of ${r1(b.quota)} days left`}>
+              <g key={b.type.id} className={`lv-ring ${dim ? 'dim' : ''}`} role="img" tabIndex={0} onMouseEnter={() => setFocus(b.type.id)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(b.type.id)} onBlur={() => setFocus(null)} aria-label={`${b.type.name}: ${r1(b.available)} of ${r1(b.quota)} days left`}>
                 <circle cx={mid} cy={mid} r={r} fill="none" stroke={b.type.color} strokeOpacity="0.14" strokeWidth={stroke} />
                 {used > 0 && (
                   <circle className="lv-arc" cx={mid} cy={mid} r={r} fill="none" stroke={b.type.color} strokeOpacity="0.3" strokeWidth={stroke} transform={`rotate(${-90 + share * 360} ${mid} ${mid})`} style={{ '--len': C * used, '--circ': C, transitionDelay: `${i * 110 + 250}ms` }} />
@@ -245,7 +245,7 @@ function Capsule({ b, i, sd }) {
     <article className="lv-cap" style={{ '--c': t.color, '--i': i }}>
       <header>
         <span className="lv-cap-dot" />
-        <h4>{t.name}</h4>
+        <h3>{t.name}</h3>
         <Badge tone={t.paid === 'Unpaid' ? 'red' : 'green'}>{hours ? 'In hours' : t.paid}</Badge>
       </header>
       <div className="lv-cap-main">
@@ -326,7 +326,7 @@ function YearMap({ db, emp, days, types, year }) {
   const monthAt = MONTHS.map((m, i) => ({ m, col: Math.floor((lead + (new Date(year, i, 1) - new Date(year, 0, 1)) / 86400000) / 7) }));
   return (
     <div className="lv-year">
-      <div className="lv-year-scroll">
+      <div className="lv-year-scroll" tabIndex={0} role="region" aria-label="Leave by day through the year, scrolls sideways">
         <div className="lv-year-inner">
           <div className="lv-year-months" style={{ '--cols': cols }}>
             {monthAt.map((x) => (
@@ -452,12 +452,12 @@ function LeaveInsights({ db, user, year }) {
     <div className="lv" ref={root}>
       <div className="lv-row lv-row-a">
         <section className="lv-card lv-rise" style={{ '--i': 0 }}>
-          <h3>Leave balance</h3>
+          <h2>Leave balance</h2>
           <p className="muted lv-sub">What is left of each leave type. Hover a ring or a row to look closer.</p>
           <Wheel items={wheel} />
         </section>
         <section className="lv-card lv-rise" style={{ '--i': 1 }}>
-          <h3>Leave rhythm</h3>
+          <h2>Leave rhythm</h2>
           <p className="muted lv-sub">Days of leave taken each month of {year}, by type. Hover a month for the details.</p>
           <Rhythm days={days} types={dayTypes} year={year} />
         </section>
@@ -471,7 +471,7 @@ function LeaveInsights({ db, user, year }) {
 
       <div className="lv-row lv-row-b">
         <section className="lv-card lv-rise" style={{ '--i': 2 }}>
-          <h3>{year} at a glance</h3>
+          <h2>{year} at a glance</h2>
           <p className="muted lv-sub">Every day of the year: where you worked, took leave, and what is still ahead.</p>
           <Deferred minHeight={210}>
             <YearMap db={db} emp={user} days={days} types={dayTypes} year={year} />
@@ -479,11 +479,11 @@ function LeaveInsights({ db, user, year }) {
         </section>
         <div className="lv-stack">
           <section className="lv-card lv-rise" style={{ '--i': 3 }}>
-            <h3>Leave by weekday</h3>
+            <h2>Leave by weekday</h2>
             <WeekdayBubbles days={days} />
           </section>
           <section className="lv-card lv-rise" style={{ '--i': 4 }}>
-            <h3>Coming up</h3>
+            <h2>Coming up</h2>
             <ComingUp db={db} emp={user} bal={bal} />
           </section>
         </div>

@@ -96,7 +96,8 @@
 }
 .pr-entity {
   position: relative;
-  z-index: 30;
+  /* Above the page content so its menu opens over it, but below the sticky topbar (30). */
+  z-index: 5;
   margin-bottom: 22px;
 }
 .pr-entity .dd-btn {

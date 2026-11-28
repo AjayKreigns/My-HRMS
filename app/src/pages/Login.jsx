@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getDB, setSession, addItem } from '../store.js';
 import { Modal, toast } from '../ui.jsx';
-import photo from '../assets/login-photo.jpg';
+import photo from '../assets/login-photo.webp';
 import hiveLogo from '../assets/ife-hive-logo.svg';
 import hiveMark from '../assets/ife-hive-mark.svg';
 import companyLogo from '../assets/ifluids-logo.png';
@@ -77,16 +77,16 @@ export default function Login({ mode = 'login' }) {
 
   return (
     <div className="lg">
-      <div className="lg-art">
+      <div className="lg-art" aria-hidden="true">
         <img src={photo} alt="" />
         <div className="lg-art-caption">
           <span>iFe Hive</span>
           <strong>People, pay and time, together.</strong>
         </div>
       </div>
-      <div className="lg-panel">
+      <main className="lg-panel">
         <img className="lg-logo" src={hiveLogo} alt="iFe Hive" width="150" height="50" />
-        <p className="lg-title">{forgot ? 'Forgot password' : 'Login to iFe Hive'}</p>
+        <h1 className="lg-title">{forgot ? 'Forgot password' : 'Login to iFe Hive'}</h1>
         <p className="lg-sub">{forgot ? 'Enter your work email and HR will reset it.' : 'Welcome back. Sign in with your work email.'}</p>
         {sent ? (
           <div className="lg-sent">
@@ -134,7 +134,7 @@ export default function Login({ mode = 'login' }) {
             </p>
           </div>
         </div>
-      </div>
+      </main>
       {legal && (
         <Modal title={legal === 'terms' ? 'Terms of Use' : 'Privacy Policy'} onClose={() => setLegal(null)}>
           <p className="muted">

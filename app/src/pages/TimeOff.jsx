@@ -85,7 +85,7 @@ function DayBar({ rec, compact }) {
   const endsAt = live && worked < need ? ` · done at ${fmtTime(plusMinutes(rec.clockIn, need))}` : '';
   return (
     <div className={`day-bar ${compact ? 'compact' : ''}`} title={`${hm(worked)} of ${hm(need)} (${done}%)${endsAt}`}>
-      <div className="day-bar-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={done}>
+      <div className="day-bar-track" role="progressbar" aria-label="Working hours completed" aria-valuemin={0} aria-valuemax={100} aria-valuenow={done}>
         <div className={`day-bar-fill ${tone}`} style={{ width: `${pct}%` }} />
       </div>
       {!compact && (

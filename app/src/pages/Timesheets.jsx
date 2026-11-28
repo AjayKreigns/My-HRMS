@@ -69,7 +69,7 @@ export default function Timesheets({ user }) {
                     </th>
                   ))}
                   <th>Total</th>
-                  <th />
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>

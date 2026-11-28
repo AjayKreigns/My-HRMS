@@ -48,7 +48,7 @@ export function PayslipView({ slip, company }) {
           <img src={companyLogo} alt={company.name} height="44" style={{ height: 44, width: 'auto', flex: 'none' }} />
           <div>
             <h3 style={{ fontSize: 17 }}>{company.name}</h3>
-            <p className="muted">{company.address}{company.city ? `, ${company.city}` : ''}</p>
+            {(company.address || company.city) && <p className="muted">{[company.address, company.city].filter(Boolean).join(', ')}</p>}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>

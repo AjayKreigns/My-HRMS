@@ -176,7 +176,7 @@ export default function Hiring({ user }) {
               const list = cands.filter((c) => c.stage === s);
               return (
                 <div key={s} className="kan-col">
-                  <h4>{s} <span className="muted">{list.length}</span></h4>
+                  <h2>{s} <span className="muted">{list.length}</span></h2>
                   {list.map((c) => (
                     <div key={c.id} className="kan-card" onClick={() => setOpen(c)}>
                       <strong>{c.name}</strong>

@@ -538,7 +538,7 @@ const COMPANY_FIELDS = [
   { key: 'website', label: 'Website', section: 'Company' },
   { key: 'email', label: 'HR email', type: 'email', section: 'Company' },
   { key: 'phone', label: 'Phone', type: 'tel', section: 'Company' },
-  { key: 'address', label: 'Registered address', full: true, section: 'Address' },
+  { key: 'address', label: 'Registered address', full: true, section: 'Address', placeholder: 'Printed on payslips. Add the registered address.' },
   { key: 'city', label: 'City', section: 'Address' },
   { key: 'state', label: 'State', section: 'Address' },
   { key: 'country', label: 'Country', section: 'Address' },

@@ -6,12 +6,12 @@
 .px {
   --px-ink: #12202b;
   --px-steel: #566b7b;
-  --px-faint: #8a9aa6;
+  --px-faint: #5d6d82; /* was #8a9aa6, 2.6:1; now 4.7:1 on the slip background */
   --px-rule: #d3dbe1;
   --px-sheet: #fcfdfd;
   --px-slip: #f1f5f7;
   --px-go: #0f7a55;
-  --px-hold: #b86e00;
+  --px-hold: #92590a; /* was #b86e00, 3.6:1; now 5.1:1 */
   --px-stop: #c13b25;
   --px-go-wash: #e2f3ec;
   --px-hold-wash: #fcefd6;

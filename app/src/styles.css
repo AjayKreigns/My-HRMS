@@ -6,7 +6,7 @@
   --brand-soft: #eaf1ff;
   --accent: #b91c1c;
   --ink: #142233;
-  --muted: #64748b;
+  --muted: #566579; /* 4.5:1 or better on every light surface (tab bar, cards, glass) */
   --line: #e2e8f0;
   --line-soft: #edf1f6;
   --bg: #f3f6f9;
@@ -86,6 +86,21 @@ h3,
 h4 {
   margin: 0;
   font-weight: 600;
+}
+/* Text for screen readers only: it keeps a structure (a page heading, a column name) without showing on screen. */
+.page-loading {
+  min-height: 40vh;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 p {
   margin: 0;
@@ -252,6 +267,7 @@ p {
 }
 .topbar .global-search {
   width: 420px;
+  min-width: 0;
 }
 .topbar .searchbox {
   height: 40px;
@@ -283,8 +299,12 @@ p {
   border-radius: 6px;
   padding: 2px 7px;
 }
+.topbar .clock-pill {
+  flex: none;
+}
 .topbar .clock-pill .muted {
   font-size: 12px;
+  white-space: nowrap;
 }
 .topbar-sep {
   width: 1px;
@@ -498,6 +518,7 @@ p {
   border-bottom: 1px solid var(--line-soft);
   flex-wrap: wrap;
 }
+.card-head h2,
 .card-head h3 {
   font-size: 14.5px;
   font-weight: 700;
@@ -867,6 +888,9 @@ p {
 /* ---------- table ---------- */
 .table-wrap {
   overflow-x: auto;
+  /* A positioned scroll container clips and scrolls the hidden "Actions" header text (.sr-only is absolutely positioned);
+     without this it escaped the container and made the whole page scroll sideways on phones. */
+  position: relative;
 }
 .table {
   width: 100%;
@@ -919,11 +943,11 @@ p {
 }
 .badge-green {
   background: #e7f6ec;
-  color: #15803d;
+  color: #157a38;
 }
 .badge-amber {
   background: #fdf2e3;
-  color: #b45309;
+  color: #a04c07; /* was #b45309: 4.4:1 on a highlighted table row; now 5.3:1 */
 }
 .badge-red {
   background: #fbe9e9;
@@ -1195,6 +1219,7 @@ p {
   padding: 18px 22px;
   border-bottom: 1px solid var(--line-soft);
 }
+.modal-head h2,
 .modal-head h3 {
   font-size: 16px;
   font-weight: 700;
@@ -1300,6 +1325,7 @@ p {
   padding: 10px;
   min-height: 200px;
 }
+.kan-col h2,
 .kan-col h4 {
   font-size: 12.5px;
   margin-bottom: 8px;
@@ -1458,6 +1484,7 @@ p {
   align-items: center;
   flex-wrap: wrap;
 }
+.profile-head h1,
 .profile-head h2 {
   font-size: 20px;
 }
@@ -1907,6 +1934,7 @@ p {
   background: radial-gradient(circle, color-mix(in srgb, var(--brand) 14%, transparent), transparent 70%);
   pointer-events: none;
 }
+.lv-card h2,
 .lv-card h3 {
   margin: 0 0 2px;
   font-size: 15px;
@@ -2208,6 +2236,7 @@ p {
   align-items: center;
   gap: 8px;
 }
+.lv-cap h3,
 .lv-cap h4 {
   flex: 1;
   margin: 0;

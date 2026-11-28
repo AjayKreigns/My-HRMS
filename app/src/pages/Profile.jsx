@@ -243,7 +243,7 @@ export default function Profile({ user, empId, tab: initialTab }) {
           <Avatar emp={emp} size={76} />
           <div style={{ flex: 1, minWidth: 220 }}>
             <div className="row">
-              <h2>{fullName(emp)}</h2>
+              <h1>{fullName(emp)}</h1>
               <Badge>{emp.status}</Badge>
             </div>
             <p className="muted">
@@ -268,7 +268,7 @@ export default function Profile({ user, empId, tab: initialTab }) {
         <div className="grid g2">
           <Card title="About" actions={canPersonal && <Btn small kind="ghost" icon="edit" onClick={() => setEdit({ title: 'About', fields: [{ key: 'about', label: 'About me', type: 'textarea', full: true, rows: 5 }] })}>Edit</Btn>}>
             <p>{emp.about || <span className="muted">No introduction yet.</span>}</p>
-            <h4 style={{ fontSize: 12.5, margin: '14px 0 6px' }}>Skills</h4>
+            <h2 style={{ fontSize: 12.5, margin: '14px 0 6px' }}>Skills</h2>
             {(emp.skills || []).map((s) => <span key={s} className="chip">{s}</span>)}
           </Card>
           <Card title="At a glance">

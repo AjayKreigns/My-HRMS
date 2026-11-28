@@ -91,6 +91,12 @@ function upgrade(db) {
     });
     db.migrations.push('pt-slabs-1');
   }
+  if (!db.migrations.includes('company-address-1')) {
+    // The sample data used to store an instruction as the registered address, and it printed on every payslip.
+    // Settings now shows that hint as a placeholder instead. An address someone typed in stays as it is.
+    if (db.company?.address === 'Update the registered address in Settings') db.company.address = '';
+    db.migrations.push('company-address-1');
+  }
   // Months already locked keep the payslips they were paid with.
   freezeLockedRuns(db);
   return db;

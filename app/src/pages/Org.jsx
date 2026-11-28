@@ -225,7 +225,7 @@ export function Engage({ user }) {
                   {(p.authorId === user.id || admin) && <Btn kind="icon" icon="trash" aria-label="Delete post" onClick={() => confirmAction('Delete this post?') && removeItem('posts', p.id)} />}
                 </span>
               </div>
-              {p.title && <h3 style={{ fontSize: 15, marginTop: 10 }}>{p.title}</h3>}
+              {p.title && <h2 style={{ fontSize: 15, marginTop: 10 }}>{p.title}</h2>}
               {p.type === 'Praise' ? (
                 <div className="praise">
                   <div className="row"><Icon name="award" /> <strong>{p.badge}</strong> — {p.praiseTo.map((id) => fullName(empById(db, id))).join(', ')}</div>

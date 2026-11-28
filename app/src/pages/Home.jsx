@@ -55,7 +55,7 @@ export default function Home({ user }) {
               </div>
             </div>
             <div className="row">
-              <button className="btn" style={{ background: '#fff', color: 'var(--brand)' }} onClick={() => clock.toggle()}>
+              <button className="btn" style={{ background: '#fff', color: 'var(--brand-dark)' }} onClick={() => clock.toggle()}>
                 <Icon name="clock" size={16} /> {clock.clockedIn ? 'Clock out' : clock.rec?.clockOut ? 'Clock in again' : 'Web clock in'}
               </button>
               {!clock.rec && (
@@ -131,7 +131,7 @@ export default function Home({ user }) {
       <div className="grid g3">
         <Card title={`On leave today (${offToday.length})`}>
           {offToday.length === 0 ? <p className="muted">Everyone is in today.</p> : <div className="row">{offToday.map((e) => <EmpChip key={e.id} emp={e} onClick={() => go(`profile/${e.id}`)} />)}</div>}
-          <h4 style={{ fontSize: 12.5, margin: '16px 0 8px' }}>Working remotely ({wfhToday.length})</h4>
+          <h3 style={{ fontSize: 12.5, margin: '16px 0 8px' }}>Working remotely ({wfhToday.length})</h3>
           {wfhToday.length === 0 ? <p className="muted">No one is working remotely.</p> : <div className="row">{wfhToday.map((e) => <Avatar key={e.id} emp={e} />)}</div>}
         </Card>
         <Card title="Celebrations this month">
@@ -152,7 +152,7 @@ export default function Home({ user }) {
           </ul>
           {joinees.length > 0 && (
             <>
-              <h4 style={{ fontSize: 12.5, margin: '12px 0 4px' }}>New joinees</h4>
+              <h3 style={{ fontSize: 12.5, margin: '12px 0 4px' }}>New joinees</h3>
               <ul className="list">
                 {joinees.map((e) => (
                   <li key={'j' + e.id}>

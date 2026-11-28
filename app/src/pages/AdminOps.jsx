@@ -116,7 +116,7 @@ function RuleTester({ db, rule }) {
   };
   return (
     <div className="rule-test">
-      <h4 className="form-section">Test these rules</h4>
+      <h3 className="form-section">Test these rules</h3>
       <div className="row" style={{ flexWrap: 'wrap', marginBottom: 8 }}>
         <input type="date" className="input-sm" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Test from date" />
         <span>to</span>
@@ -235,7 +235,7 @@ function LeaveTypes() {
             <>
               {v.unit !== 'Hours' && <RuleTester db={db} rule={v} />}
               <div className="rule-summary">
-                <h4 className="form-section">In plain words</h4>
+                <h3 className="form-section">In plain words</h3>
                 <ul className="rules">
                   {describeRules(v, db).map((line, i) => (
                     <li key={i}>{line}</li>
@@ -393,7 +393,7 @@ function WorkingDaySummary({ db, s }) {
   if (!s.workStart || !s.workEnd) return null;
   return (
     <div className="rule-summary">
-      <h4 className="form-section">In plain words</h4>
+      <h3 className="form-section">In plain words</h3>
       <ul className="rules">
         <li>
           The working day is {clock12(s.workStart)} to {clock12(s.workEnd)}: {hm(Math.round(e.requiredHours * 60))} {s.requiredHours ? 'needed (set above)' : 'in all'}.

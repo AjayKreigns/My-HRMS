@@ -76,9 +76,27 @@ export function Icon({ name, size = 18, className = '', style }) {
   );
 }
 
+// The initials are white, so the background needs 4.5:1 against white. A colour that is too light is darkened just enough;
+// colours that already pass are left as they are. Colours are saved with each person, so this is done where they are drawn.
+function readableBg(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  let rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const lum = (c) => {
+    const [r, g, b] = c.map((v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  for (let i = 0; i < 30 && 1.05 / (lum(rgb) + 0.05) < 4.6; i++) rgb = rgb.map((v) => Math.round(v * 0.96));
+  return `#${rgb.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 export function Avatar({ emp, size = 32 }) {
   return (
-    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.38, background: emp?.color || '#94a3b8' }} title={fullName(emp)}>
+    <span className="avatar" aria-hidden="true" style={{ width: size, height: size, fontSize: size * 0.38, background: readableBg(emp?.color || '#94a3b8') }} title={fullName(emp)}>
       {initials(emp)}
     </span>
   );
@@ -112,7 +130,7 @@ export function Card({ title, actions, children, className = '', pad = true }) {
     <section className={`card ${className}`}>
       {(title || actions) && (
         <header className="card-head">
-          <h3>{title}</h3>
+          <h2>{title}</h2>
           <div className="card-actions">{actions}</div>
         </header>
       )}
@@ -364,7 +382,7 @@ export function Dropdown({ value, options, onChange, label, className = '' }) {
         className="dd-btn"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={label}
+        aria-label={label ? `${label}: ${cur?.label ?? ''}` : undefined}
         onClick={() => {
           setAt(Math.max(0, opts.indexOf(cur)));
           setOpen(!open);
@@ -417,12 +435,12 @@ export function Modal({ title, onClose, children, footer, wide }) {
     <div style={{ display: 'contents' }} className={dark ? 'theme-dark' : 'theme-light'}>
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
-        <header className="modal-head">
-          <h3>{title}</h3>
+        <div className="modal-head">
+          <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
             <Icon name="x" />
           </button>
-        </header>
+        </div>
         <div className="modal-body">{children}</div>
         {footer && <footer className="modal-foot">{footer}</footer>}
       </div>
@@ -791,9 +809,9 @@ export function FormGrid({ fields, values, setValues, db }) {
     if (f.section && f.section !== lastSection) {
       lastSection = f.section;
       out.push(
-        <h4 key={`s_${f.section}`} className="form-section full">
+        <h3 key={`s_${f.section}`} className="form-section full">
           {f.section}
-        </h4>,
+        </h3>,
       );
     }
     out.push(<Field key={f.key} field={f} value={values[f.key]} db={db} values={values} onChange={(v) => setValues((s) => ({ ...s, [f.key]: v }))} />);
@@ -882,8 +900,8 @@ export function DataTable({ columns, rows, onRowClick, empty = 'No records found
                 className={c.sortable === false ? '' : 'sortable'}
                 onClick={() => c.sortable !== false && setSort((s) => ({ key: c.key, dir: s?.key === c.key && s.dir === 'asc' ? 'desc' : 'asc' }))}
               >
-                {c.label}
-                {sort?.key === c.key && <span className="sort">{sort.dir === 'asc' ? ' ▲' : ' ▼'}</span>}
+                {c.label || <span className="sr-only">{c.srLabel || 'Actions'}</span>}
+                {sort?.key === c.key &&<span className="sort">{sort.dir === 'asc' ? ' ▲' : ' ▼'}</span>}
               </th>
             ))}
           </tr>

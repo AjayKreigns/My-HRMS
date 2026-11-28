@@ -215,7 +215,7 @@ export function seed() {
 
   return {
     version: 1,
-    migrations: ['leave-rules-1', 'attendance-hours-1', 'attendance-action-1', 'sample-no-leave-1', 'permission-leave-1', 'sample-leave-history-1'],
+    migrations: ['leave-rules-1', 'attendance-hours-1', 'attendance-action-1', 'sample-no-leave-1', 'permission-leave-1', 'sample-leave-history-1', 'company-address-1'],
     company: {
       name: 'iFluids Engineering',
       legalName: 'iFluids Engineering',
@@ -223,7 +223,7 @@ export function seed() {
       email: 'hr@ifluids.com',
       phone: '',
       website: 'www.ifluids.com',
-      address: 'Update the registered address in Settings',
+      address: '',
       city: 'Chennai',
       state: 'Tamil Nadu',
       country: 'India',
