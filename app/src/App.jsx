@@ -25,6 +25,7 @@ const OrgTree = named(loaders.org, 'OrgTree');
 const Engage = named(loaders.org, 'Engage');
 const Admin = lazy(loaders.admin);
 const Payroll = lazy(loaders.payroll);
+import LogoLoader from './LogoLoader.jsx';
 import hiveLogo from './assets/ife-hive-logo-white.svg';
 import hiveMark from './assets/ife-hive-mark-dark.svg';
 
@@ -500,7 +501,7 @@ function Shell({ user, route }) {
           </div>
         </header>
         <main key={pageKey} className={`content ${section === 'admin' && sub === 'payroll' ? 'content-flush' : 'page-enter'}`}>
-          <Suspense fallback={<div className="page-loading" role="status"><span className="sr-only">Loading</span></div>}>{page}</Suspense>
+          <Suspense fallback={<LogoLoader />}>{page}</Suspense>
         </main>
       </div>
       {pw && (
