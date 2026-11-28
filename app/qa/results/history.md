@@ -11,3 +11,4 @@ One row per `npm run qa:update` run, newest last.
 | 2026-11-28 12:46 | 2a5ad03+changes | 73/73 | (no browser tests ran: a bug in the update script, fixed in the next row) | pass | 2 / 0 / 1 |
 | 2026-11-28 12:47 | 2a5ad03+changes | 73/73 | chromium 20/20, firefox 20/20, webkit 20/20 | pass | 2 / 0 / 1 |
 | 2026-11-28 13:04 | 2a5ad03+changes | 73/73 | chromium 20/20 | pass | 2 / 0 / 1 |
+| 2026-11-28 13:14 | f909f1d+changes | 73/73 | chromium 20/20 | pass | 2 / 0 / 1 |

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-28 13:04",
-  "commit": "2a5ad03",
+  "generatedAt": "2026-11-28 13:14",
+  "commit": "f909f1d",
   "dirty": true,
   "node": "v26.13.0",
   "projectsRun": [
@@ -391,7 +391,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 1779
+            "ms": 3847
           },
           "firefox": {
             "status": "pass",
@@ -412,7 +412,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 2609
+            "ms": 4572
           },
           "firefox": {
             "status": "pass",
@@ -433,7 +433,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 2465
+            "ms": 4536
           },
           "firefox": {
             "status": "pass",
@@ -454,7 +454,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 2588
+            "ms": 6238
           },
           "firefox": {
             "status": "pass",
@@ -475,7 +475,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 2637
+            "ms": 4770
           },
           "firefox": {
             "status": "pass",
@@ -496,7 +496,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3583
+            "ms": 7002
           },
           "firefox": {
             "status": "pass",
@@ -517,7 +517,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 2948
+            "ms": 2881
           },
           "firefox": {
             "status": "pass",
@@ -538,7 +538,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3680
+            "ms": 5302
           },
           "firefox": {
             "status": "pass",
@@ -559,7 +559,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3054
+            "ms": 4186
           },
           "firefox": {
             "status": "pass",
@@ -580,7 +580,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3705
+            "ms": 5182
           },
           "firefox": {
             "status": "pass",
@@ -601,7 +601,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3803
+            "ms": 3537
           },
           "firefox": {
             "status": "pass",
@@ -622,7 +622,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4027
+            "ms": 4388
           },
           "firefox": {
             "status": "pass",
@@ -643,7 +643,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4991
+            "ms": 5232
           },
           "firefox": {
             "status": "pass",
@@ -664,7 +664,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3545
+            "ms": 4108
           },
           "firefox": {
             "status": "pass",
@@ -685,7 +685,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 219372
+            "ms": 127485
           },
           "firefox": {
             "status": "pass",
@@ -706,7 +706,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 219036
+            "ms": 121270
           },
           "firefox": {
             "status": "pass",
@@ -727,7 +727,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 218428
+            "ms": 115377
           },
           "firefox": {
             "status": "pass",
@@ -748,7 +748,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 214591
+            "ms": 96912
           },
           "firefox": {
             "status": "pass",
@@ -769,7 +769,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 213272
+            "ms": 95243
           },
           "firefox": {
             "status": "pass",
@@ -790,7 +790,7 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 198265
+            "ms": 94252
           },
           "firefox": {
             "status": "pass",

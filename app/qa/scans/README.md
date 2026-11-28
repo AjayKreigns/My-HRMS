@@ -8,6 +8,7 @@ The scripts used for the hand-run scans on 2026-11-27, copied here unchanged so 
 | `contrast.cjs` | lists failing colour pairs per theme with their ratios | same |
 | `perf.cjs` | page speed on desktop and on a mid-tier phone profile | `npx vite preview --port 4199` serving a fresh build |
 | `smoke.cjs` | read-only check of the two live sites (loads, logos, console errors, security headers) | internet |
+| `live-check.cjs` | read-only check of a deployed copy: is the new build live, do the fixed pages, payslip and PDF work, console errors, security headers. Usage: `node qa/scans/live-check.cjs <site-url>` | internet |
 | `navcost.cjs` | first-visit time per page on the phone profile after the app has sat idle (shows the cost of loading pages on demand and the effect of the idle prefetch) | `vite preview` on port 4199 |
 | `whyslow.cjs` | the largest-paint element, request order and main-thread breakdown per page on the phone profile | same |
 | `leave-timing.cjs` | why the Leave page takes 1.3 s to stop changing (long tasks, number of page updates) | same |

@@ -37,21 +37,21 @@
   },
   {
     "id": "S-05",
-    "name": "Live sites load (GitHub Pages and Cloudflare)",
-    "tool": "Playwright, read only",
-    "lastRun": "2026-11-27",
+    "name": "Live sites: new build serves and works (GitHub Pages and Cloudflare)",
+    "tool": "qa/scans/live-check.cjs (Playwright, read only)",
+    "lastRun": "2026-11-28",
     "result": "PASS",
-    "summary": "Both show the iFe Hive login with all logos and no console errors (they do not yet have the 2026-11-27 fixes)",
-    "details": "results/scans/2026-11-27.md#live-sites"
+    "summary": "Both sites serve the 2026-11-28 build and pass 14 of 14 checks: the three fixes, on-demand pages, WebP login photo, encrypted payslip PDF, no console errors",
+    "details": "results/scans/2026-11-28.md#deployment"
   },
   {
     "id": "S-06",
     "name": "Security headers on the live sites",
     "tool": "Playwright, read only",
-    "lastRun": "2026-11-27",
+    "lastRun": "2026-11-28",
     "result": "FAIL",
-    "summary": "No Content-Security-Policy, X-Content-Type-Options, X-Frame-Options or Referrer-Policy on either; HSTS on GitHub Pages only",
-    "details": "results/scans/2026-11-27.md#live-sites"
+    "summary": "Still no Content-Security-Policy, X-Content-Type-Options, X-Frame-Options or Referrer-Policy on either; HSTS on GitHub Pages only. Deferred until real hosting (decision D2)",
+    "details": "results/scans/2026-11-28.md#deployment"
   },
   {
     "id": "S-07",
