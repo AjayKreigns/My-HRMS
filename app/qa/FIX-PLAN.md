@@ -28,7 +28,7 @@ Nothing is committed. Two reports are in `C:\Users\0635\Desktop\HRMS\test-report
 - SLOW-1 (optional): the Leave page animates for about 1.3 s.
 - F6 tooling: decide on ESLint; the slow sweep is now opt-in (`npm run qa:update:full`); tidy `playwright.config.js` indentation; move the scan scripts into the update command (T3).
 - F0: commit in three parts and deploy to GitHub Pages and Cloudflare, then recheck the live sites (S-05, S-06).
-- F2 (security headers) and F5 (Vite upgrade) are deferred until real hosting.
+- F2 (security headers) is deferred until real hosting. F5 (Vite upgrade) was done on 2026-11-28.
 
 **Next, in order** (waiting for the owner's go-ahead)
 1. Decide whether to go further on phone speed (Payroll direct load, blocked time) or accept the current numbers.
@@ -40,11 +40,11 @@ Nothing is committed. Two reports are in `C:\Users\0635\Desktop\HRMS\test-report
 |---|---|---|---|---|---|---|
 | F1 | Check and, if clean, upgrade jsPDF (critical audit finding) | Only critical item; small and well covered | 45 min | medium: payslip PDF must keep its password | audit, P-073, E-14 | [x] 2026-11-27 |
 | F3 | Accessibility (4 WCAG rules, 6 best-practice) | Largest user impact; shared components fix many pages at once | 3 to 4 h | medium: contrast changes the look | S-01, 3 new accessibility tests | [x] 2026-11-28 (follow-up: BUG-1) |
-| F4 | Phone performance | Needs a stable base; measure before and after | 2 to 3 h | medium: lazy loading changes page switches | S-04 | [x] 2026-11-28 (first paint and Home done; Payroll direct load and blocked time still open) |
+| F4 | Phone performance | Needs a stable base; measure before and after | 2 to 3 h | medium: lazy loading changes page switches | S-04 | [x] 2026-11-28 (round 2 done: Login and Home meet all three targets; Payroll opened directly shows content at 2.1 s but blocked time is 0.44 to 0.60 s, target 0.3 s) |
 | F6 | Test tooling gaps | Locks everything above in | 3 h | low | register | [ ] |
 | F0 | Commit and deploy everything (moved to the end, D5) | Deploy once, after the fixes | 15 min | low | all tests, S-05 | [x] 2026-11-28 |
 | F2 | Security headers on Cloudflare | Waits for real hosting (D2) | 30 min | low | S-06, new E-15 | deferred |
-| F5 | Vite and esbuild upgrade (dev tools only) | Dev-only exposure; waits with F2 (D2) | 45 min | medium | audit, build, all browser tests | deferred |
+| F5 | Vite and esbuild upgrade (dev tools only) | Dev-only exposure | 45 min | medium | audit, build, all browser tests | [x] 2026-11-28 (Vite 7.3.8; audit 0 issues; all tests pass) |
 
 ## F0. Commit and deploy what is already fixed
 

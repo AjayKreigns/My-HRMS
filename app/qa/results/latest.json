@@ -1,10 +1,12 @@
 {
-  "generatedAt": "2026-11-28 13:14",
-  "commit": "f909f1d",
+  "generatedAt": "2026-11-28 16:52",
+  "commit": "af00810",
   "dirty": true,
   "node": "v26.13.0",
   "projectsRun": [
-    "chromium"
+    "chromium",
+    "firefox",
+    "webkit"
   ],
   "payroll": {
     "exitCode": 0,
@@ -381,9 +383,87 @@
   "e2e": {
     "exitCode": 0,
     "projects": [
-      "chromium"
+      "chromium",
+      "firefox",
+      "webkit"
     ],
     "tests": [
+      {
+        "area": "",
+        "name": "every page and tab works for the admin (desktop)",
+        "file": "full-frontend.spec.js:110",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 62706
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 102988
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 108022
+          }
+        }
+      },
+      {
+        "area": "",
+        "name": "every page and tab works for the manager (desktop)",
+        "file": "full-frontend.spec.js:110",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 42349
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 47464
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 45627
+          }
+        }
+      },
+      {
+        "area": "",
+        "name": "every page and tab works for the employee (desktop)",
+        "file": "full-frontend.spec.js:110",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 40430
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 29237
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 46510
+          }
+        }
+      },
+      {
+        "area": "",
+        "name": "every page works for the admin on a phone",
+        "file": "full-frontend.spec.js:118",
+        "byProject": {
+          "chromium": {
+            "status": "pass",
+            "ms": 26378
+          },
+          "firefox": {
+            "status": "pass",
+            "ms": 49044
+          },
+          "webkit": {
+            "status": "pass",
+            "ms": 17098
+          }
+        }
+      },
       {
         "area": "sign in",
         "name": "login page shows the iFe Hive and iFluids branding",
@@ -391,17 +471,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3847
+            "ms": 710
           },
           "firefox": {
             "status": "pass",
-            "ms": 3502,
-            "carried": true
+            "ms": 5315
           },
           "webkit": {
             "status": "pass",
-            "ms": 7164,
-            "carried": true
+            "ms": 1117
           }
         }
       },
@@ -412,17 +490,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4572
+            "ms": 1759
           },
           "firefox": {
             "status": "pass",
-            "ms": 3291,
-            "carried": true
+            "ms": 2395
           },
           "webkit": {
             "status": "pass",
-            "ms": 8721,
-            "carried": true
+            "ms": 2447
           }
         }
       },
@@ -433,17 +509,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4536
+            "ms": 1642
           },
           "firefox": {
             "status": "pass",
-            "ms": 3851,
-            "carried": true
+            "ms": 1412
           },
           "webkit": {
             "status": "pass",
-            "ms": 2293,
-            "carried": true
+            "ms": 2065
           }
         }
       },
@@ -454,17 +528,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 6238
+            "ms": 2005
           },
           "firefox": {
             "status": "pass",
-            "ms": 3150,
-            "carried": true
+            "ms": 6377
           },
           "webkit": {
             "status": "pass",
-            "ms": 3662,
-            "carried": true
+            "ms": 2756
           }
         }
       },
@@ -475,17 +547,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4770
+            "ms": 1657
           },
           "firefox": {
             "status": "pass",
-            "ms": 2786,
-            "carried": true
+            "ms": 3874
           },
           "webkit": {
             "status": "pass",
-            "ms": 2438,
-            "carried": true
+            "ms": 2169
           }
         }
       },
@@ -496,17 +566,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 7002
+            "ms": 2403
           },
           "firefox": {
             "status": "pass",
-            "ms": 6113,
-            "carried": true
+            "ms": 7316
           },
           "webkit": {
             "status": "pass",
-            "ms": 5517,
-            "carried": true
+            "ms": 3722
           }
         }
       },
@@ -517,17 +585,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 2881
+            "ms": 1886
           },
           "firefox": {
             "status": "pass",
-            "ms": 4840,
-            "carried": true
+            "ms": 2585
           },
           "webkit": {
             "status": "pass",
-            "ms": 4640,
-            "carried": true
+            "ms": 2488
           }
         }
       },
@@ -538,17 +604,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 5302
+            "ms": 3108
           },
           "firefox": {
             "status": "pass",
-            "ms": 5395,
-            "carried": true
+            "ms": 2788
           },
           "webkit": {
             "status": "pass",
-            "ms": 5062,
-            "carried": true
+            "ms": 3907
           }
         }
       },
@@ -559,17 +623,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4186
+            "ms": 1917
           },
           "firefox": {
             "status": "pass",
-            "ms": 2329,
-            "carried": true
+            "ms": 2057
           },
           "webkit": {
             "status": "pass",
-            "ms": 2336,
-            "carried": true
+            "ms": 2464
           }
         }
       },
@@ -580,17 +642,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 5182
+            "ms": 3005
           },
           "firefox": {
             "status": "pass",
-            "ms": 3079,
-            "carried": true
+            "ms": 3889
           },
           "webkit": {
             "status": "pass",
-            "ms": 4542,
-            "carried": true
+            "ms": 4772
           }
         }
       },
@@ -601,17 +661,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 3537
+            "ms": 2703
           },
           "firefox": {
             "status": "pass",
-            "ms": 3284,
-            "carried": true
+            "ms": 3319
           },
           "webkit": {
             "status": "pass",
-            "ms": 4617,
-            "carried": true
+            "ms": 4701
           }
         }
       },
@@ -622,17 +680,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4388
+            "ms": 3066
           },
           "firefox": {
             "status": "pass",
-            "ms": 3390,
-            "carried": true
+            "ms": 3622
           },
           "webkit": {
             "status": "pass",
-            "ms": 5174,
-            "carried": true
+            "ms": 6058
           }
         }
       },
@@ -643,17 +699,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 5232
+            "ms": 3948
           },
           "firefox": {
             "status": "pass",
-            "ms": 3846,
-            "carried": true
+            "ms": 4080
           },
           "webkit": {
             "status": "pass",
-            "ms": 6329,
-            "carried": true
+            "ms": 6454
           }
         }
       },
@@ -664,17 +718,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 4108
+            "ms": 4056
           },
           "firefox": {
             "status": "pass",
-            "ms": 4173,
-            "carried": true
+            "ms": 3769
           },
           "webkit": {
             "status": "pass",
-            "ms": 5406,
-            "carried": true
+            "ms": 5746
           }
         }
       },
@@ -685,17 +737,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 127485
+            "ms": 85147
           },
           "firefox": {
             "status": "pass",
-            "ms": 152735,
-            "carried": true
+            "ms": 132247
           },
           "webkit": {
             "status": "pass",
-            "ms": 132572,
-            "carried": true
+            "ms": 135995
           }
         }
       },
@@ -706,17 +756,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 121270
+            "ms": 86657
           },
           "firefox": {
             "status": "pass",
-            "ms": 155014,
-            "carried": true
+            "ms": 137738
           },
           "webkit": {
             "status": "pass",
-            "ms": 127135,
-            "carried": true
+            "ms": 126545
           }
         }
       },
@@ -727,17 +775,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 115377
+            "ms": 73268
           },
           "firefox": {
             "status": "pass",
-            "ms": 203412,
-            "carried": true
+            "ms": 100416
           },
           "webkit": {
             "status": "pass",
-            "ms": 115962,
-            "carried": true
+            "ms": 115608
           }
         }
       },
@@ -748,17 +794,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 96912
+            "ms": 50486
           },
           "firefox": {
             "status": "pass",
-            "ms": 108693,
-            "carried": true
+            "ms": 74131
           },
           "webkit": {
             "status": "pass",
-            "ms": 80175,
-            "carried": true
+            "ms": 76819
           }
         }
       },
@@ -769,17 +813,15 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 95243
+            "ms": 48481
           },
           "firefox": {
             "status": "pass",
-            "ms": 104484,
-            "carried": true
+            "ms": 82098
           },
           "webkit": {
             "status": "pass",
-            "ms": 71898,
-            "carried": true
+            "ms": 77456
           }
         }
       },
@@ -790,23 +832,21 @@
         "byProject": {
           "chromium": {
             "status": "pass",
-            "ms": 94252
+            "ms": 45831
           },
           "firefox": {
             "status": "pass",
-            "ms": 95225,
-            "carried": true
+            "ms": 74113
           },
           "webkit": {
             "status": "pass",
-            "ms": 66537,
-            "carried": true
+            "ms": 71036
           }
         }
       }
     ],
     "stats": {
-      "expected": 20,
+      "expected": 72,
       "unexpected": 0,
       "flaky": 0,
       "skipped": 0
@@ -814,30 +854,19 @@
   },
   "build": {
     "exitCode": 0,
-    "mainJsKB": 299.89,
-    "mainJsGzipKB": 99.72,
+    "mainJsKB": 304.9,
+    "mainJsGzipKB": 102.03,
     "chunkWarning": false
   },
   "audit": {
     "counts": {
       "info": 0,
       "low": 0,
-      "moderate": 1,
-      "high": 1,
+      "moderate": 0,
+      "high": 0,
       "critical": 0,
-      "total": 2
+      "total": 0
     },
-    "packages": [
-      {
-        "name": "esbuild",
-        "severity": "moderate",
-        "direct": false
-      },
-      {
-        "name": "vite",
-        "severity": "high",
-        "direct": true
-      }
-    ]
+    "packages": []
   }
 }

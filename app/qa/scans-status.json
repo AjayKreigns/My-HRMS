@@ -32,8 +32,8 @@
     "tool": "Chromium via Playwright, production build",
     "lastRun": "2026-11-28",
     "result": "IMPROVED, NEEDS WORK",
-    "summary": "First paint 1.65 to 1.69 s (was 2.1 to 2.6 s); largest paint 1.65 s Home, 2.03 s Login, 3.73 s Payroll opened directly; blocked time 0.39 to 0.73 s",
-    "details": "results/scans/2026-11-28.md#page-speed-on-a-phone-class-device"
+    "summary": "Content shown: Login 1.4 s, Home 1.8 to 1.9 s, Payroll opened directly 2.1 to 2.2 s (was 2.7 to 2.95 s). Blocked time: Login 0.09 to 0.16 s, Home 0.20 to 0.28 s (both meet 0.3 s), Payroll direct 0.44 to 0.60 s (target 0.3 s)",
+    "details": "results/scans/2026-11-28.md#later-the-same-day-audit-phone-speed-round-2"
   },
   {
     "id": "S-05",

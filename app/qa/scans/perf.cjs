@@ -6,7 +6,7 @@ const RUNS = 3;
 const performance_reqs = () => 0;
 const med = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
 
-const INIT = `(() => { window.__m = { lcp: 0, cls: 0, fcp: 0 };
+const INIT = `(() => { window.__m = { lcp: 0, cls: 0, fcp: 0, shown: 0 };
   new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__m.lcp = e.startTime; }).observe({ type: 'largest-contentful-paint', buffered: true });
   new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__m.cls += e.value; }).observe({ type: 'layout-shift', buffered: true });
   new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.name === 'first-contentful-paint') window.__m.fcp = e.startTime; }).observe({ type: 'paint', buffered: true });
@@ -30,12 +30,16 @@ async function profile(name, viewport, throttle) {
     await cdp.send('Network.enable');
     await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 150, downloadThroughput: (1.6 * 1024 * 1024) / 8, uploadThroughput: (750 * 1024) / 8 });
   }
-  for (const [label, url] of [['login (signed out)', null], ['home', '#/home'], ['payroll analytics', '#/admin/payroll']]) {
+  // The third item is a selector for the page's own content. "Shown" is when it is on the page and drawn: Chrome's largest-paint reading is
+  // not reliable on its own (it sometimes never counts the text of a page that loads late), so this is the number to trust for Payroll.
+  for (const [label, url, sel] of [['login (signed out)', null, 'main h1'], ['home', '#/home', 'main h1'], ['payroll analytics', '#/admin/payroll', '.px p']]) {
     const runs = [];
     for (let i = 0; i < RUNS; i++) {
       const pctx = url ? ctx : await browser.newContext({ viewport });
       const p = await pctx.newPage();
       await p.addInitScript(INIT);
+      // polled every 25 ms rather than watched with a MutationObserver, which on its own added about 100 ms to the blocked-time reading
+      await p.addInitScript(`(() => { const sel = ${JSON.stringify(sel)}; const t = setInterval(() => { if (document.body && document.querySelector(sel)) { clearInterval(t); requestAnimationFrame(() => requestAnimationFrame(() => (window.__m.shown = Math.round(performance.now())))); } }, 25); })()`);
       const c = await pctx.newCDPSession(p);
       if (throttle) {
         await c.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -54,7 +58,7 @@ async function profile(name, viewport, throttle) {
       await p.close();
       if (!url) await pctx.close();
     }
-    out[label] = { FCP: Math.round(med(runs.map((r) => r.fcp))), LCP: Math.round(med(runs.map((r) => r.lcp))), CLS: +med(runs.map((r) => r.cls)).toFixed(3), TBTms: Math.round(med(runs.map((r) => r.tbt))), loadMs: Math.round(med(runs.map((r) => r.load))), transferKB: Math.round(med(runs.map((r) => r.bytes)) / 1024), requests: med(runs.map((r) => r.reqs)) };
+    out[label] = { FCP: Math.round(med(runs.map((r) => r.fcp))), SHOWN: Math.round(med(runs.map((r) => r.shown))), LCP: Math.round(med(runs.map((r) => r.lcp))), CLS: +med(runs.map((r) => r.cls)).toFixed(3), TBTms: Math.round(med(runs.map((r) => r.tbt))), loadMs: Math.round(med(runs.map((r) => r.load))), transferKB: Math.round(med(runs.map((r) => r.bytes)) / 1024), requests: med(runs.map((r) => r.reqs)) };
   }
   await browser.close();
   return out;
@@ -63,7 +67,7 @@ async function profile(name, viewport, throttle) {
 (async () => {
   const desktop = await profile('desktop', { width: 1280, height: 720 }, false);
   const phone = await profile('phone', { width: 375, height: 812 }, true);
-  const show = (t, o) => { console.log(t); for (const [k, v] of Object.entries(o)) console.log(`  ${k.padEnd(20)} FCP ${String(v.FCP).padStart(5)} ms | LCP ${String(v.LCP).padStart(5)} ms | CLS ${v.CLS} | TBT~${String(v.TBTms).padStart(4)} ms | load ${String(v.loadMs).padStart(5)} ms | ${v.transferKB} KB in ${v.requests} requests`); };
+  const show = (t, o) => { console.log(t); for (const [k, v] of Object.entries(o)) console.log(`  ${k.padEnd(20)} FCP ${String(v.FCP).padStart(5)} ms | content shown ${String(v.SHOWN).padStart(5)} ms | LCP ${String(v.LCP).padStart(5)} ms | CLS ${v.CLS} | TBT~${String(v.TBTms).padStart(4)} ms | load ${String(v.loadMs).padStart(5)} ms | ${v.transferKB} KB in ${v.requests} requests`); };
   show('DESKTOP (no throttling, cache off, median of ' + RUNS + ')', desktop);
   show('PHONE (375px, 4x CPU slowdown, 1.6 Mbps / 150 ms, cache off, median of ' + RUNS + ')', phone);
 })().catch((e) => { console.error('PERF FAILED', e); process.exit(1); });
