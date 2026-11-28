@@ -5,16 +5,26 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:all": "playwright test",
+    "test:e2e:headed": "playwright test --project=chromium --headed --workers=1",
+    "test:e2e:ui": "playwright test --project=chromium --ui",
+    "test:full": "playwright test full-frontend --project=chromium",
+    "qa:update": "node qa/update-results.mjs",
+    "qa:update:all": "node qa/update-results.mjs --all",
+    "qa:update:full": "node qa/update-results.mjs --all --full"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource/plus-jakarta-sans": "^5.3.0",
-    "jspdf": "^2.5.2",
+    "jspdf": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
+    "@playwright/test": "^1.65.1",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^5.4.11"
   }
